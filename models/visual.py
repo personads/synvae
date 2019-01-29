@@ -67,7 +67,7 @@ class VisualVae:
         reconstructions_flat = tf.reshape(reconstructions, (-1, self.img_height * self.img_width * self.img_depth))
 
         recon_loss = tf.reduce_sum(tf.square(reconstructions_flat - originals_flat), axis=1)
-        latent_loss = - 0.5 * tf.reduce_sum(1 + logvars - tf.square(means) - tf.exp(logvars), axis=-1)
+        latent_loss = - 0.5 * tf.reduce_sum(1 + logvars - tf.square(means) - tf.exp(logvars), axis=1)
         loss = tf.reduce_mean(recon_loss + latent_loss)
         return loss
 
