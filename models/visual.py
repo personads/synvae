@@ -16,11 +16,12 @@ class VisualVae:
         self.decoder = self.make_decoder()
         # set up computation graph
         self.images = tf.placeholder(tf.float32, [None, self.img_height, self.img_width, self.img_depth])
-        mean, logvar = self.encode(self.images)
-        latent = self.reparameterize(mean, logvar)
+        means, logvars = self.encode(self.images)
+        latent = self.reparameterize(means, logvars)
         self.reconstructions = self.decode(latent)
+        print("Reconstruction Shape:", self.reconstructions.shape)
         # set up loss calculation
-        self.loss = self.calc_loss(self.images, self.reconstructions, latent, mean, logvar)
+        self.loss = self.calc_loss(self.images, self.reconstructions, means, logvars)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(learning_rate)
         # set up training operation
@@ -49,11 +50,8 @@ class VisualVae:
         return eps * tf.exp(logvar * .5) + mean
 
 
-    def decode(self, z, apply_sigmoid=False):
-        logits = self.decoder(z)
-        if apply_sigmoid:
-            probs = tf.sigmoid(logits)
-            return probs
+    def decode(self, latent):
+        logits = self.decoder(latent)
         return logits
 
 
@@ -64,12 +62,14 @@ class VisualVae:
                 axis=raxis)
 
 
-    def calc_loss(self, original, reconstruction, latent, mean, logvar):
-        cross_ent = tf.nn.sigmoid_cross_entropy_with_logits(logits=reconstruction, labels=original)
-        logpx_z = -tf.reduce_sum(cross_ent, axis=[1, 2, 3])
-        logpz = self.log_normal(latent, 0., 0.)
-        logqz_x = self.log_normal(latent, mean, logvar)
-        return -tf.reduce_mean(logpx_z + logpz - logqz_x)
+    def calc_loss(self, originals, reconstructions, means, logvars):
+        originals_flat = tf.reshape(originals, (-1, self.img_height * self.img_width * self.img_depth))
+        reconstructions_flat = tf.reshape(reconstructions, (-1, self.img_height * self.img_width * self.img_depth))
+
+        recon_loss = tf.reduce_sum(tf.square(reconstructions_flat - originals_flat), axis=1)
+        latent_loss = - 0.5 * tf.reduce_sum(1 + logvars - tf.square(means) - tf.exp(logvars), axis=-1)
+        loss = tf.reduce_mean(recon_loss + latent_loss)
+        return loss
 
 
     def save(self, tf_session, path):
@@ -91,6 +91,39 @@ class VisualVae:
         plt.savefig(path)
 
 
+class CifarVae(VisualVae):
+    def __init__(self, latent_dim, batch_size, verbose=True):
+        super().__init__(img_height=32, img_width=32, img_depth=3, latent_dim=latent_dim, batch_size=batch_size, learning_rate=1e-4, verbose=verbose)
+
+
+    def make_encoder(self):
+        return tf.keras.Sequential(
+            [
+                tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth)),
+                tf.keras.layers.Conv2D(filters=16, kernel_size=2, strides=(1, 1), padding='same', activation=tf.nn.relu),
+                tf.keras.layers.Conv2D(filters=32, kernel_size=2, strides=(1, 1), padding='same', activation=tf.nn.relu),
+                tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=(1, 1), padding='same', activation=tf.nn.relu),
+                tf.keras.layers.Conv2D(filters=32, kernel_size=4, strides=(1, 1), padding='same', activation=tf.nn.relu),
+                tf.keras.layers.Flatten(),
+                tf.keras.layers.Dense(self.latent_dim + self.latent_dim, activation=tf.nn.relu)
+            ]
+        )
+
+
+    def make_decoder(self):
+        return tf.keras.Sequential(
+            [
+                tf.keras.layers.InputLayer(input_shape=(self.latent_dim,)),
+                tf.keras.layers.Dense(units=(self.img_height//2 *  self.img_width//2 * 32), activation=tf.nn.relu),
+                tf.keras.layers.Reshape(target_shape=(self.img_height//2, self.img_width//2, 32)),
+                tf.keras.layers.Conv2DTranspose(filters=32, kernel_size=4, strides=2, padding='same', activation=tf.nn.relu),
+                tf.keras.layers.Conv2DTranspose(filters=32, kernel_size=3, strides=1, padding='same', activation=tf.nn.relu),
+                tf.keras.layers.Conv2DTranspose(filters=16, kernel_size=3, strides=1, padding='same', activation=tf.nn.relu),
+                tf.keras.layers.Conv2DTranspose(filters=self.img_depth, kernel_size=2, strides=1, padding="same", activation=tf.nn.sigmoid)
+            ]
+        )
+
+
 class MnistVae(VisualVae):
     def __init__(self, latent_dim, batch_size, verbose=True):
         super().__init__(img_height=28, img_width=28, img_depth=1, latent_dim=latent_dim, batch_size=batch_size, learning_rate=1e-4, verbose=verbose)
@@ -99,14 +132,11 @@ class MnistVae(VisualVae):
     def make_encoder(self):
         return tf.keras.Sequential(
             [
-                    tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth)),
-                    tf.keras.layers.Conv2D(
-                            filters=32, kernel_size=3, strides=(2, 2), activation=tf.nn.relu),
-                    tf.keras.layers.Conv2D(
-                            filters=64, kernel_size=3, strides=(2, 2), activation=tf.nn.relu),
-                    tf.keras.layers.Flatten(),
-                    # No activation
-                    tf.keras.layers.Dense(self.latent_dim + self.latent_dim),
+                tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth)),
+                tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=(2, 2), activation=tf.nn.relu),
+                tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=(2, 2), activation=tf.nn.relu),
+                tf.keras.layers.Flatten(),
+                tf.keras.layers.Dense(self.latent_dim + self.latent_dim)
             ]
         )
 
@@ -117,20 +147,8 @@ class MnistVae(VisualVae):
                 tf.keras.layers.InputLayer(input_shape=(self.latent_dim,)),
                 tf.keras.layers.Dense(units=7*7*32, activation=tf.nn.relu),
                 tf.keras.layers.Reshape(target_shape=(7, 7, 32)),
-                tf.keras.layers.Conv2DTranspose(
-                        filters=64,
-                        kernel_size=3,
-                        strides=(2, 2),
-                        padding="SAME",
-                        activation=tf.nn.relu),
-                tf.keras.layers.Conv2DTranspose(
-                        filters=32,
-                        kernel_size=3,
-                        strides=(2, 2),
-                        padding="SAME",
-                        activation=tf.nn.relu),
-                # No activation
-                tf.keras.layers.Conv2DTranspose(
-                        filters=1, kernel_size=3, strides=(1, 1), padding="SAME"),
+                tf.keras.layers.Conv2DTranspose(filters=64, kernel_size=3, strides=(2, 2), padding='same', activation=tf.nn.relu),
+                tf.keras.layers.Conv2DTranspose(filters=32, kernel_size=3, strides=(2, 2), padding='same', activation=tf.nn.relu),
+                tf.keras.layers.Conv2DTranspose(filters=1, kernel_size=3, strides=(1, 1), padding='same')
             ]
         )
