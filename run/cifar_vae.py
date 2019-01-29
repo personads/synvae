@@ -16,7 +16,7 @@ if __name__ == '__main__':
     args = arg_parser.parse_args()
     model_path, tb_path, out_path = make_experiment_dir(args.exp_path)
     # set up model
-    cifar_vae = CifarVae(latent_dim=64, batch_size=args.batch_size)
+    cifar_vae = CifarVae(latent_dim=512, batch_size=args.batch_size)
     # load CIFAR
     cifar = Cifar(args.cifar_path, verbose=True)
     train_images = cifar.data[:int(cifar.data.shape[0]*.8)]

@@ -16,7 +16,6 @@ class VisualVae:
         means, logvars = self.encode(self.images)
         latent = self.reparameterize(means, logvars)
         self.reconstructions = self.decode(latent)
-        print("Reconstruction Shape:", self.reconstructions.shape)
         # set up loss calculation
         self.loss = self.calc_loss(self.images, self.reconstructions, means, logvars)
         # set up optimizer
@@ -27,6 +26,16 @@ class VisualVae:
         tf.summary.image('Original', self.images, max_outputs=4)
         tf.summary.image('Reconstructions', self.reconstructions, max_outputs=4)
         tf.summary.scalar('Loss', self.loss)
+        if self.verbose: print(self)
+
+
+    def __repr__(self):
+        res  = '<VisualVae: '
+        res += str(self.images.shape[1:])
+        res += ' -> ' + str(self.latent_dim)
+        res += ' -> ' + str(self.reconstructions.shape[1:])
+        res += '>'
+        return res
 
 
     def encode(self, images):
@@ -80,21 +89,24 @@ class CifarVae(VisualVae):
 
     def encode(self, images):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth))(images)
-        conv1 = tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(inputs)
+        conv1 = tf.keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(inputs)
         conv2 = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv1)
-        flat = tf.keras.layers.Flatten()(conv2)
-        mean = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.relu)(flat)
-        logvar = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.relu)(flat)
+        conv3 = tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv2)
+        flat = tf.keras.layers.Flatten()(conv3)
+        dense = tf.keras.layers.Dense(units=(self.img_height//8 *  self.img_width//8 * 128), activation=tf.nn.relu)(flat)
+        mean = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.relu)(dense)
+        logvar = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.relu)(dense)
         return mean, logvar
 
 
     def decode(self, latents):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.latent_dim,))(latents)
-        dense = tf.keras.layers.Dense(units=(self.img_height//4 *  self.img_width//4 * 64), activation=tf.nn.relu)(inputs)
-        shape = tf.keras.layers.Reshape(target_shape=(self.img_height//4, self.img_width//4, 64))(dense)
-        deconv1 = tf.keras.layers.Conv2DTranspose(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(shape)
-        deconv2 = tf.keras.layers.Conv2DTranspose(filters=32, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv1)
-        recons = tf.keras.layers.Conv2DTranspose(filters=self.img_depth, kernel_size=2, strides=1, padding="same", activation=tf.nn.sigmoid)(deconv2)
+        dense = tf.keras.layers.Dense(units=(self.img_height//8 *  self.img_width//8 * 128), activation=tf.nn.relu)(inputs)
+        shape = tf.keras.layers.Reshape(target_shape=(self.img_height//8, self.img_width//8, 128))(dense)
+        deconv1 = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(shape)
+        deconv2 = tf.keras.layers.Conv2DTranspose(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv1)
+        deconv3 = tf.keras.layers.Conv2DTranspose(filters=32, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv2)
+        recons = tf.keras.layers.Conv2DTranspose(filters=self.img_depth, kernel_size=2, strides=1, padding="same", activation=tf.nn.sigmoid)(deconv3)
         return recons
 
 
