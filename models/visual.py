@@ -44,8 +44,8 @@ class VisualVae:
 
 
     def reparameterize(self, mean, logvar):
-        eps = tf.random_normal(shape=(self.batch_size, self.latent_dim)) # batchsize, latent_dim (necessary while building graph)
-        return eps * tf.exp(logvar * .5) + mean
+        eps = tf.random_normal(shape=(self.batch_size, self.latent_dim), mean=0., stddev=1.) # batchsize, latent_dim (necessary while building graph)
+        return eps * tf.exp(logvar) + mean
 
 
     def decode(self, latent):
@@ -89,11 +89,11 @@ class CifarVae(VisualVae):
 
     def encode(self, images):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth))(images)
-        conv1 = tf.keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(inputs)
+        conv1 = tf.keras.layers.Conv2D(filters=128, kernel_size=2, strides=2, padding='same', activation=tf.nn.relu)(inputs)
         conv2 = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv1)
-        conv3 = tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv2)
+        conv3 = tf.keras.layers.Conv2D(filters=32, kernel_size=4, strides=2, padding='same', activation=tf.nn.relu)(conv2)
         flat = tf.keras.layers.Flatten()(conv3)
-        dense = tf.keras.layers.Dense(units=(self.img_height//8 *  self.img_width//8 * 128), activation=tf.nn.relu)(flat)
+        dense = tf.keras.layers.Dense(units=(self.img_height//4 *  self.img_width//4 * 64), activation=tf.nn.relu)(flat)
         mean = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.relu)(dense)
         logvar = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.relu)(dense)
         return mean, logvar
@@ -101,11 +101,11 @@ class CifarVae(VisualVae):
 
     def decode(self, latents):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.latent_dim,))(latents)
-        dense = tf.keras.layers.Dense(units=(self.img_height//8 *  self.img_width//8 * 128), activation=tf.nn.relu)(inputs)
-        shape = tf.keras.layers.Reshape(target_shape=(self.img_height//8, self.img_width//8, 128))(dense)
+        dense = tf.keras.layers.Dense(units=(self.img_height//4 *  self.img_width//4 * 64), activation=tf.nn.relu)(inputs)
+        shape = tf.keras.layers.Reshape(target_shape=(self.img_height//4, self.img_width//4, 64))(dense)
         deconv1 = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(shape)
         deconv2 = tf.keras.layers.Conv2DTranspose(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv1)
-        deconv3 = tf.keras.layers.Conv2DTranspose(filters=32, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv2)
+        deconv3 = tf.keras.layers.Conv2DTranspose(filters=32, kernel_size=3, strides=1, padding='same', activation=tf.nn.relu)(deconv2)
         recons = tf.keras.layers.Conv2DTranspose(filters=self.img_depth, kernel_size=2, strides=1, padding="same", activation=tf.nn.sigmoid)(deconv3)
         return recons
 
@@ -131,5 +131,5 @@ class MnistVae(VisualVae):
         shape = tf.keras.layers.Reshape(target_shape=(7, 7, 32))(dense)
         deconv1 = tf.keras.layers.Conv2DTranspose(filters=64, kernel_size=3, strides=(2, 2), padding='same', activation=tf.nn.relu)(shape)
         deconv2 = tf.keras.layers.Conv2DTranspose(filters=32, kernel_size=3, strides=(2, 2), padding='same', activation=tf.nn.relu)(deconv1)
-        recons = tf.keras.layers.Conv2DTranspose(filters=1, kernel_size=3, strides=(1, 1), padding='same')(deconv2)
+        recons = tf.keras.layers.Conv2DTranspose(filters=1, kernel_size=3, strides=(1, 1), padding='same', activation=tf.nn.sigmoid)(deconv2)
         return recons
