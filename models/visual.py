@@ -1,5 +1,5 @@
-import matplotlib.pyplot as plt
 import numpy as np
+import PIL
 import tensorflow as tf
 
 
@@ -48,9 +48,9 @@ class VisualVae:
         return eps * tf.exp(logvar) + mean
 
 
-    def decode(self, latent):
-        latent = None
-        return latent
+    def decode(self, latents):
+        latents = None
+        return latents
 
 
     def calc_loss(self, originals, reconstructions, means, logvars):
@@ -73,13 +73,9 @@ class VisualVae:
         if self.verbose: print("Restored model from '%s'." % path)
 
 
-    def save_image(self, image, path):
-        color_map = None
-        if len(image.shape) < 3:
-            color_map = 'gray'
-        plt.imshow(image, cmap=color_map)
-        plt.axis('off')
-        plt.savefig(path)
+    def save_image(self, image_array, path):
+        image = PIL.Image.fromarray((image_array * 255).astype(np.uint8))
+        image.save(path)
 
 
 class CifarVae(VisualVae):
@@ -101,8 +97,9 @@ class CifarVae(VisualVae):
 
     def decode(self, latents):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.latent_dim,))(latents)
-        dense = tf.keras.layers.Dense(units=(self.img_height//4 *  self.img_width//4 * 64), activation=tf.nn.relu)(inputs)
-        shape = tf.keras.layers.Reshape(target_shape=(self.img_height//4, self.img_width//4, 64))(dense)
+        dense1 = tf.keras.layers.Dense(units=(self.img_height//4 *  self.img_width//4 * 32), activation=tf.nn.relu)(inputs)
+        dense2 = tf.keras.layers.Dense(units=(self.img_height//4 *  self.img_width//4 * 64), activation=tf.nn.relu)(dense1)
+        shape = tf.keras.layers.Reshape(target_shape=(self.img_height//4, self.img_width//4, 64))(dense2)
         deconv1 = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(shape)
         deconv2 = tf.keras.layers.Conv2DTranspose(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv1)
         deconv3 = tf.keras.layers.Conv2DTranspose(filters=32, kernel_size=3, strides=1, padding='same', activation=tf.nn.relu)(deconv2)
