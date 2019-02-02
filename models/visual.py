@@ -85,13 +85,13 @@ class CifarVae(VisualVae):
 
     def encode(self, images):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth))(images)
-        conv1 = tf.keras.layers.Conv2D(filters=128, kernel_size=2, strides=2, padding='same', activation=tf.nn.relu)(inputs)
+        conv1 = tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(inputs)
         conv2 = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv1)
-        conv3 = tf.keras.layers.Conv2D(filters=32, kernel_size=4, strides=2, padding='same', activation=tf.nn.relu)(conv2)
+        conv3 = tf.keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv2)
         flat = tf.keras.layers.Flatten()(conv3)
         dense = tf.keras.layers.Dense(units=(self.img_height//4 *  self.img_width//4 * 64), activation=tf.nn.relu)(flat)
-        mean = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.relu)(dense)
-        logvar = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.relu)(dense)
+        mean = tf.keras.layers.Dense(self.latent_dim)(dense)
+        logvar = tf.keras.layers.Dense(self.latent_dim)(dense)
         return mean, logvar
 
 
@@ -103,7 +103,7 @@ class CifarVae(VisualVae):
         deconv1 = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(shape)
         deconv2 = tf.keras.layers.Conv2DTranspose(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv1)
         deconv3 = tf.keras.layers.Conv2DTranspose(filters=32, kernel_size=3, strides=1, padding='same', activation=tf.nn.relu)(deconv2)
-        recons = tf.keras.layers.Conv2DTranspose(filters=self.img_depth, kernel_size=2, strides=1, padding="same", activation=tf.nn.sigmoid)(deconv3)
+        recons = tf.keras.layers.Conv2DTranspose(filters=self.img_depth, kernel_size=1, strides=1, padding="same", activation=tf.nn.sigmoid)(deconv3)
         return recons
 
 
