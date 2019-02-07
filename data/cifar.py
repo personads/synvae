@@ -1,13 +1,11 @@
-import os
+import logging, os, pickle
+
 import matplotlib.pyplot as plt
 import numpy as np
-import pickle
 
 class Cifar:
     '''CIFAR Dataloader'''
-    def __init__(self, cifar_dir, verbose=False):
-        self.verbose = verbose
-
+    def __init__(self, cifar_dir):
         self.data, self.labels = self._load_cifar_directory(cifar_dir)
         self.label_descs = ['airplane', 'automobile', 'bird', 'cat', 'deer', 'dog', 'frog', 'horse', 'ship', 'truck']
 
@@ -44,7 +42,7 @@ class Cifar:
         data = data.transpose([0, 2, 3, 1]) # num_data, height, width, RGB
         data = data.astype(float) # convert to float
         data /= 255. # normalize values to [0., 1.]
-        if self.verbose: print("[CIFAR] Loaded %d images from '%s'." % (cifar_dict[b'data'].shape[0], pickle_path))
+        logging.info("[CIFAR] Loaded %d images from '%s'." % (cifar_dict[b'data'].shape[0], pickle_path))
         return data, labels
 
 

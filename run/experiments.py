@@ -1,4 +1,4 @@
-import argparse, os, sys
+import argparse, logging, os, sys
 
 def parse_arguments(exp_name):
     arg_parser = argparse.ArgumentParser(description=exp_name)
@@ -21,4 +21,16 @@ def make_experiment_dir(path):
     os.mkdir(tensorboard_path)
     output_path = os.path.join(path, 'output')
     os.mkdir(output_path)
-    return checkpoints_path, tensorboard_path, output_path
+    # make necessary paths
+    log_path = os.path.join(path, 'experiment.log')
+    return checkpoints_path, tensorboard_path, output_path, log_path
+
+
+def setup_logging(log_path):
+    log_format = '[%(levelname)s] %(asctime)s    %(message)s'
+    log_datefmt = '%Y-%m-%d %H:%M:%S'
+    log_level = logging.INFO
+    logging.basicConfig(filename=log_path, format=log_format, datefmt=log_datefmt, level=log_level)
+
+    logger = logging.getLogger()
+    logger.addHandler(logging.StreamHandler(sys.stdout))
