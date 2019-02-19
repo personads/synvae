@@ -28,10 +28,6 @@ if __name__ == '__main__':
     cifar_vae = CifarVae(latent_dim=512, batch_size=batch_size)
     # load CIFAR
     cifar = Cifar(args.cifar_path)
-    # DEBUG
-    cifar.data = cifar.data[:200]
-    cifar.labels = cifar.labels[:200]
-    # END DEBUG
     logging.info("Loaded %d images from CIFAR10." % (cifar.data.shape[0]))
     # set up TF datasets
     num_batches = cifar.data.shape[0] // batch_size + 1
