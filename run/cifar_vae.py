@@ -30,10 +30,8 @@ if __name__ == '__main__':
     num_batches_valid = valid_images.shape[0] // args.batch_size + 1
     train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(train_images.shape[0]).batch(args.batch_size)
     train_iterator = train_dataset.make_initializable_iterator()
-    train_next = train_iterator.get_next()
     valid_dataset = tf.data.Dataset.from_tensor_slices(valid_images).batch(args.batch_size)
     valid_iterator = valid_dataset.make_initializable_iterator()
-    valid_next = valid_iterator.get_next()
     logging.info("Loaded data into TensorFlow.")
 
     epochs = args.epochs

@@ -11,12 +11,14 @@ class VisualVae:
         self.img_width = img_width
         self.img_depth = img_depth
         self.latent_dim = latent_dim
+        self.is_training = False
         self.batch_size = batch_size
+        self.epoch = 0
         # set up computation graph
         self.images = tf.placeholder(tf.float32, [None, self.img_height, self.img_width, self.img_depth])
         means, logvars = self.encode(self.images)
-        latent = self.reparameterize(means, logvars)
-        self.reconstructions = self.decode(latent)
+        self.latents = self.reparameterize(means, logvars)
+        self.reconstructions = self.decode(self.latents)
         # set up loss calculation
         self.loss = self.calc_loss(self.images, self.reconstructions, means, logvars)
         # set up optimizer
@@ -45,7 +47,8 @@ class VisualVae:
 
 
     def reparameterize(self, mean, logvar):
-        eps = tf.random_normal(shape=(self.batch_size, self.latent_dim), mean=0., stddev=1.) # batchsize, latent_dim (necessary while building graph)
+        # batchsize, latent_dim (necessary while building graph)
+        eps = tf.random_normal(shape=(self.batch_size, self.latent_dim), mean=0., stddev=1.) if self.is_training else 1.
         return eps * tf.exp(logvar) + mean
 
 
@@ -58,7 +61,8 @@ class VisualVae:
         originals_flat = tf.reshape(originals, (-1, self.img_height * self.img_width * self.img_depth))
         reconstructions_flat = tf.reshape(reconstructions, (-1, self.img_height * self.img_width * self.img_depth))
 
-        recon_loss = tf.reduce_sum(tf.square(originals_flat - reconstructions_flat), axis=1)
+        recon_loss = tf.reduce_sum(tf.square(originals_flat - reconstructions_flat), axis=1) # MSE
+        # recon_loss = tf.reduce_sum(tf.keras.backend.abs(originals_flat - reconstructions_flat), axis=1) #L1
         latent_loss = - 0.5 * tf.reduce_sum(1 + logvars - tf.square(means) - tf.exp(logvars), axis=1)
         loss = tf.reduce_mean(recon_loss + latent_loss)
         return loss
@@ -86,41 +90,45 @@ class VisualVae:
         tf_session.run(tf.global_variables_initializer())
         # epoch training loop
         min_loss = None
-        for epoch in range(1, max_epochs + 1):
+        while self.epoch < (max_epochs + 1):
+            self.epoch += 1
+            self.is_training = True
             tf_session.run(train_iter.initializer)
             # iterate over batches
             avg_loss = 0.
             batch_idx = 0
             while True:
                 try:
-                    batch_idx += 1
                     batch = tf_session.run(next_op)
+                    batch_idx += 1
                     _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, merge_op], feed_dict={self.images: batch})
                     avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
-                    sys.stdout.write("\repoch %d/%d. batch %d. avg_loss %.2f. cur_loss %.2f.   " % (epoch, max_epochs, batch_idx, avg_loss, cur_loss))
+                    sys.stdout.write("\repoch %d/%d. batch %d. avg_loss %.2f. cur_loss %.2f.   " % (self.epoch, max_epochs, batch_idx, avg_loss, cur_loss))
                     sys.stdout.flush()
                 # end of dataset
                 except tf.errors.OutOfRangeError:
                     # exit batch loop and proceed to next epoch
                     break
             # write epoch summary
-            tf_writer.add_summary(summaries, epoch)
-            logging.info("\rcompleted epoch %d/%d (%d batches). avg_loss %.2f.%s" % (epoch, max_epochs, batch_idx, avg_loss, ' '*32))
+            tf_writer.add_summary(summaries, self.epoch)
+            logging.info("\rcompleted epoch %d/%d (%d batches). avg_loss %.2f.%s" % (self.epoch, max_epochs, batch_idx, avg_loss, ' '*32))
 
             # check performance on test split
-            valid_loss = self.test(tf_session, valid_iter, epoch, out_path)
+            self.is_training = False
+            valid_loss = self.test(tf_session, valid_iter, out_path)
            
             # save latest model
             logging.info("saving latest model.")
             self.save(tf_session, os.path.join(model_path, 'latest_model.ckpt'))
             # check if model has improved
-            if (min_loss is None) or (avg_loss < min_loss):
-                logging.info("saving best model with avg_loss %.2f." % avg_loss)
+            if (min_loss is None) or (valid_loss < min_loss):
+                logging.info("saving best model with valid_loss %.2f." % valid_loss)
                 self.save(tf_session, os.path.join(model_path, 'best_model.ckpt'))
                 min_loss = avg_loss
 
 
-    def test(self, tf_session, iterator, epoch, out_path, export_step=5):
+    def test(self, tf_session, iterator, out_path, export_step=5):
+        self.is_training = False
         next_op = iterator.get_next()
         tf_session.run(iterator.initializer)
         # iterate over batches
@@ -128,17 +136,17 @@ class VisualVae:
         batch_idx = 0
         while True:
             try:
-                batch_idx += 1
                 sys.stdout.write("\revaluating batch %d." % (batch_idx))
                 sys.stdout.flush()
                 batch = tf_session.run(next_op)
+                batch_idx += 1
                 cur_loss, reconstructions = tf_session.run([self.loss, self.reconstructions], feed_dict={self.images: batch})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                 # save original image and reconstruction
-                if (batch_idx-1) % export_step == 0:
-                    if epoch == 1:
-                        self.save_image(batch[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(epoch) + '_orig.png'))
-                    self.save_image(reconstructions[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(epoch) + '_recon.png'))
+                if (export_step > 0) and ((batch_idx-1) % export_step == 0):
+                    if self.epoch == 1:
+                        self.save_image(batch[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_orig.png'))
+                    self.save_image(reconstructions[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_recon.png'))
             # end of dataset
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch
@@ -159,7 +167,7 @@ class CifarVae(VisualVae):
         conv2 = tf.keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv1)
         conv3 = tf.keras.layers.Conv2D(filters=256, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv2)
         flat = tf.keras.layers.Flatten()(conv3)
-        dense = tf.keras.layers.Dense(units=(self.img_height//8 *  self.img_width//8 * 256), activation=tf.nn.relu)(flat)
+        dense = tf.keras.layers.Dense(units=(self.img_height//8 * self.img_width//8 * 256), activation=tf.nn.relu)(flat)
         mean = tf.keras.layers.Dense(self.latent_dim)(dense)
         logvar = tf.keras.layers.Dense(self.latent_dim)(dense)
         return mean, logvar
@@ -167,7 +175,7 @@ class CifarVae(VisualVae):
 
     def decode(self, latents):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.latent_dim,))(latents)
-        dense1 = tf.keras.layers.Dense(units=(self.img_height//8 *  self.img_width//8 * 256), activation=tf.nn.relu)(inputs)
+        dense1 = tf.keras.layers.Dense(units=(self.img_height//8 * self.img_width//8 * 256), activation=tf.nn.relu)(inputs)
         shape = tf.keras.layers.Reshape(target_shape=(self.img_height//8, self.img_width//8, 256))(dense1)
         deconv1 = tf.keras.layers.Conv2DTranspose(filters=256, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(shape)
         deconv2 = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv1)

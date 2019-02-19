@@ -32,7 +32,7 @@ class Cifar:
 
         Returns:
             data (np.array): [num_data, height, width, RGB]
-            labels (list): [num_data]
+            labels (np.array): [num_data]
         '''
         with open(pickle_path, 'rb') as fo:
             cifar_dict = pickle.load(fo, encoding='bytes')
@@ -42,6 +42,7 @@ class Cifar:
         data = data.transpose([0, 2, 3, 1]) # num_data, height, width, RGB
         data = data.astype(float) # convert to float
         data /= 255. # normalize values to [0., 1.]
+        labels = np.array(labels, dtype=int) # convert labels to numpy array
         logging.info("[CIFAR] Loaded %d images from '%s'." % (cifar_dict[b'data'].shape[0], pickle_path))
         return data, labels
 
