@@ -54,7 +54,8 @@ if __name__ == '__main__':
                 sys.stdout.flush()
                 batch = sess.run(next_op)
                 batch_idx += 1
-                cur_loss, cur_recons, cur_latents = sess.run([cifar_vae.loss_infer, cifar_vae.reconstructions_infer, cifar_vae.latents_infer], feed_dict={cifar_vae.images: batch})
+                epsilons = np.zeros((batch.shape[0], cifar_vae.latent_dim))
+                cur_loss, cur_recons, cur_latents = sess.run([cifar_vae.loss, cifar_vae.reconstructions, cifar_vae.latents], feed_dict={cifar_vae.images: batch, cifar_vae.epsilons: epsilons})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                 # append to result
                 if (reconstructions is None) or (latents is None):

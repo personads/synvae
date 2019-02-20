@@ -141,7 +141,7 @@ class VisualVae:
                 sys.stdout.flush()
                 batch = tf_session.run(next_op)
                 batch_idx += 1
-                epsilons = np.ones((batch.shape[0], self.latent_dim))
+                epsilons = np.zeros((batch.shape[0], self.latent_dim))
                 cur_loss, reconstructions = tf_session.run([self.loss, self.reconstructions], feed_dict={self.images: batch, self.epsilons: epsilons})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                 # save original image and reconstruction
