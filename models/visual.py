@@ -86,6 +86,7 @@ class VisualVae:
     def train(self, tf_session, train_iter, valid_iter, max_epochs, model_path, out_path, tf_writer):
         merge_op = tf.summary.merge_all()
         next_op = train_iter.get_next()
+        valid_next_op = valid_iter.get_next()
         # initialize variables
         tf_session.run(tf.global_variables_initializer())
         # epoch training loop
@@ -116,7 +117,7 @@ class VisualVae:
 
             # check performance on test split
             self.is_training = False
-            valid_loss = self.test(tf_session, valid_iter, out_path)
+            valid_loss = self.test(tf_session, valid_iter, valid_next_op, out_path)
            
             # save latest model
             logging.info("Saving latest model...")
@@ -125,12 +126,11 @@ class VisualVae:
             if (min_loss is None) or (valid_loss < min_loss):
                 logging.info("Saving best model with valid_loss %.2f..." % valid_loss)
                 self.save(tf_session, os.path.join(model_path, 'best_model.ckpt'))
-                min_loss = avg_loss
+                min_loss = valid_loss
 
 
-    def test(self, tf_session, iterator, out_path, export_step=5):
+    def test(self, tf_session, iterator, next_op, out_path, export_step=5):
         self.is_training = False
-        next_op = iterator.get_next()
         tf_session.run(iterator.initializer)
         # iterate over batches
         avg_loss = 0.
@@ -182,7 +182,7 @@ class CifarVae(VisualVae):
         deconv1 = tf.keras.layers.Conv2DTranspose(filters=256, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(shape)
         deconv2 = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv1)
         deconv3 = tf.keras.layers.Conv2DTranspose(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv2)
-        recons = tf.keras.layers.Conv2DTranspose(filters=self.img_depth, kernel_size=1, strides=1, padding="same", activation=tf.nn.sigmoid)(deconv3)
+        recons = tf.keras.layers.Conv2DTranspose(filters=self.img_depth, kernel_size=1, strides=1, padding='same', activation=tf.nn.sigmoid)(deconv3)
         return recons
 
 
