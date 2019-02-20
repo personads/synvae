@@ -50,11 +50,11 @@ if __name__ == '__main__':
         batch_idx = 0
         while True:
             try:
-                sys.stdout.write("\rencoding batch %d..." % (batch_idx))
+                sys.stdout.write("\rEncoding batch %d..." % (batch_idx))
                 sys.stdout.flush()
                 batch = sess.run(next_op)
                 batch_idx += 1
-                cur_loss, cur_recons, cur_latents = sess.run([cifar_vae.loss, cifar_vae.reconstructions, cifar_vae.latents], feed_dict={cifar_vae.images: batch})
+                cur_loss, cur_recons, cur_latents = sess.run([cifar_vae.loss_infer, cifar_vae.reconstructions_infer, cifar_vae.latents_infer], feed_dict={cifar_vae.images: batch})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                 # append to result
                 if (reconstructions is None) or (latents is None):
@@ -66,7 +66,7 @@ if __name__ == '__main__':
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch
                 break
-        logging.info("\rencoded %d batches with avg_loss %.2f, %d reconstructions and %d latent vectors." % (batch_idx, avg_loss, reconstructions.shape[0], latents.shape[0]))
+        logging.info("\rEncoded %d batches with avg_loss %.2f, %d reconstructions and %d latent vectors." % (batch_idx, avg_loss, reconstructions.shape[0], latents.shape[0]))
 
         # calculate similarities
         logging.info("Calculating similarities...")
@@ -78,7 +78,6 @@ if __name__ == '__main__':
         rel_sim_by_label = np.zeros(len(cifar.label_descs))
         oth_sim_by_label = np.zeros(len(cifar.label_descs))
         precision_by_label = np.zeros(len(cifar.label_descs))
-        recall_by_label = np.zeros(len(cifar.label_descs))
         label_count = np.zeros(len(cifar.label_descs))
 
         logging.info("Calculating metrics (exporting for %d images)..." % (cifar.data.shape[0]//export_step))
@@ -105,9 +104,7 @@ if __name__ == '__main__':
             tp = np.sum(cifar.labels[top_idcs] == img_cls)
             fp = np.sum(cifar.labels[top_idcs] != img_cls)
             precision = tp / (tp + fp)
-            recall = tp / len(rel_idcs)
             precision_by_label[img_cls] += precision
-            recall_by_label[img_cls] += recall
 
             # export nearest neighbours every n steps
             if img_idx % export_step == 0:
@@ -123,19 +120,17 @@ if __name__ == '__main__':
         rel_sim_by_label /= label_count
         oth_sim_by_label /= label_count
         precision_by_label /= label_count
-        recall_by_label /= label_count
 
         logging.info("Overall metrics:")
         for label_idx, label in enumerate(cifar.label_descs):
-            logging.info("  %s: %.2f P@%d, %.2f R@%d, %.2f rel sim, %.2f oth sim" % (
+            logging.info("  %s: %.2f P@%d, %.2f rel sim, %.2f oth sim" % (
                 label, precision_by_label[label_idx], top_n,
-                recall_by_label[label_idx], top_n,
-                rel_sim_by_label[label_idx], oth_sim_by_label[label_idx]
+                rel_sim_by_label[label_idx],
+                oth_sim_by_label[label_idx]
                 ))
-        logging.info("Total (avg): %.2f P@%d, %.2f R@%d, %.2f rel sim, %.2f oth sim" % (
+        logging.info("Total (avg): %.2f P@%d, %.2f rel sim, %.2f oth sim" % (
                 np.mean(precision_by_label[label_idx]), top_n,
-                np.mean(recall_by_label[label_idx]), top_n,
-                np.mean(rel_sim_by_label[label_idx]), np.mean(oth_sim_by_label[label_idx])
+                np.mean(rel_sim_by_label[label_idx]),
+                np.mean(oth_sim_by_label[label_idx])
             ))
-
 

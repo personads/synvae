@@ -11,13 +11,13 @@ class VisualVae:
         self.img_width = img_width
         self.img_depth = img_depth
         self.latent_dim = latent_dim
-        self.is_training = False
         self.batch_size = batch_size
         self.epoch = 0
         # set up computation graph
         self.images = tf.placeholder(tf.float32, [None, self.img_height, self.img_width, self.img_depth])
+        self.epsilons = tf.placeholder(tf.float32, [None, self.latent_dim])
         means, logvars = self.encode(self.images)
-        self.latents = self.reparameterize(means, logvars)
+        self.latents = self.reparameterize(means, logvars, self.epsilons)
         self.reconstructions = self.decode(self.latents)
         # set up loss calculation
         self.loss = self.calc_loss(self.images, self.reconstructions, means, logvars)
@@ -46,10 +46,10 @@ class VisualVae:
         return mean, logvar
 
 
-    def reparameterize(self, mean, logvar):
+    def reparameterize(self, means, logvars, epsilons):
         # batchsize, latent_dim (necessary while building graph)
-        eps = tf.random_normal(shape=(self.batch_size, self.latent_dim), mean=0., stddev=1.) if self.is_training else 1.
-        return eps * tf.exp(logvar) + mean
+        # eps = tf.random_normal(shape=(self.batch_size, self.latent_dim), mean=0., stddev=1.) if eps is None else eps
+        return epsilons * tf.exp(logvars) + means
 
 
     def decode(self, latents):
@@ -101,9 +101,10 @@ class VisualVae:
                 try:
                     batch = tf_session.run(next_op)
                     batch_idx += 1
-                    _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, merge_op], feed_dict={self.images: batch})
+                    epsilons = np.random.normal(loc=0., scale=1., size=(batch.shape[0], self.latent_dim))
+                    _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, merge_op], feed_dict={self.images: batch, self.epsilons: epsilons})
                     avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
-                    sys.stdout.write("\repoch %d/%d. batch %d. avg_loss %.2f. cur_loss %.2f.   " % (self.epoch, max_epochs, batch_idx, avg_loss, cur_loss))
+                    sys.stdout.write("\rEpoch %d/%d. Batch %d. avg_loss %.2f. cur_loss %.2f.   " % (self.epoch, max_epochs, batch_idx, avg_loss, cur_loss))
                     sys.stdout.flush()
                 # end of dataset
                 except tf.errors.OutOfRangeError:
@@ -111,18 +112,18 @@ class VisualVae:
                     break
             # write epoch summary
             tf_writer.add_summary(summaries, self.epoch)
-            logging.info("\rcompleted epoch %d/%d (%d batches). avg_loss %.2f.%s" % (self.epoch, max_epochs, batch_idx, avg_loss, ' '*32))
+            logging.info("\rCompleted epoch %d/%d (%d batches). avg_loss %.2f.%s" % (self.epoch, max_epochs, batch_idx, avg_loss, ' '*32))
 
             # check performance on test split
             self.is_training = False
             valid_loss = self.test(tf_session, valid_iter, out_path)
            
             # save latest model
-            logging.info("saving latest model.")
+            logging.info("Saving latest model...")
             self.save(tf_session, os.path.join(model_path, 'latest_model.ckpt'))
             # check if model has improved
             if (min_loss is None) or (valid_loss < min_loss):
-                logging.info("saving best model with valid_loss %.2f." % valid_loss)
+                logging.info("Saving best model with valid_loss %.2f..." % valid_loss)
                 self.save(tf_session, os.path.join(model_path, 'best_model.ckpt'))
                 min_loss = avg_loss
 
@@ -136,11 +137,12 @@ class VisualVae:
         batch_idx = 0
         while True:
             try:
-                sys.stdout.write("\revaluating batch %d." % (batch_idx))
+                sys.stdout.write("\rEvaluating batch %d..." % (batch_idx))
                 sys.stdout.flush()
                 batch = tf_session.run(next_op)
                 batch_idx += 1
-                cur_loss, reconstructions = tf_session.run([self.loss, self.reconstructions], feed_dict={self.images: batch})
+                epsilons = np.ones((batch.shape[0], self.latent_dim))
+                cur_loss, reconstructions = tf_session.run([self.loss, self.reconstructions], feed_dict={self.images: batch, self.epsilons: epsilons})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                 # save original image and reconstruction
                 if (export_step > 0) and ((batch_idx-1) % export_step == 0):
@@ -151,7 +153,7 @@ class VisualVae:
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch
                 break
-        logging.info("\rcompleted evaluation (%d batches). avg_loss %.2f." % (batch_idx, avg_loss))
+        logging.info("\rCompleted evaluation (%d batches). avg_loss %.2f." % (batch_idx, avg_loss))
         return avg_loss
 
 
