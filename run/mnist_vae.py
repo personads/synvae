@@ -17,6 +17,7 @@ if __name__ == '__main__':
     setup_logging(log_path)
     # set up model
     mnist_vae = MnistVae(latent_dim=50, batch_size=args.batch_size)
+    mnist_vae.build()
     # load MNIST
     (train_images, _), (test_images, _) = tf.keras.datasets.mnist.load_data()
     train_images = train_images.reshape(train_images.shape[0], 28, 28, 1).astype('float32')

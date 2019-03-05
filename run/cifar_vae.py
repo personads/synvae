@@ -20,6 +20,7 @@ if __name__ == '__main__':
     setup_logging(log_path)
     # set up model
     cifar_vae = CifarVae(latent_dim=512, batch_size=args.batch_size)
+    cifar_vae.build()
     # load CIFAR
     cifar = Cifar(args.cifar_path)
     train_images = cifar.data[:int(cifar.data.shape[0]*.8)]

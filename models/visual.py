@@ -11,25 +11,18 @@ class VisualVae:
         self.img_width = img_width
         self.img_depth = img_depth
         self.latent_dim = latent_dim
+        self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epoch = 0
         # set up computation graph
-        self.images = tf.placeholder(tf.float32, [None, self.img_height, self.img_width, self.img_depth])
-        self.epsilons = tf.placeholder(tf.float32, [None, self.latent_dim])
-        means, logvars = self.encode(self.images)
-        self.latents = self.reparameterize(means, logvars, self.epsilons)
-        self.reconstructions = self.decode(self.latents)
-        # set up loss calculation
-        self.loss = self.calc_loss(self.images, self.reconstructions, means, logvars)
-        # set up optimizer
-        self.optimizer = tf.train.AdamOptimizer(learning_rate)
-        # set up training operation
-        self.train_op = self.optimizer.minimize(self.loss)
-        # add summaries for TensorBoard
-        tf.summary.image('Original', self.images, max_outputs=4)
-        tf.summary.image('Reconstructions', self.reconstructions, max_outputs=4)
-        tf.summary.scalar('Loss', self.loss)
-        logging.info(self)
+        self.images = tf.placeholder(tf.float32, [self.batch_size, self.img_height, self.img_width, self.img_depth])
+        self.epsilons = tf.placeholder(tf.float32, [self.batch_size, self.latent_dim])
+        # set up remaining operation placeholders
+        self.latents, self.means, self.logvars = None, None, None
+        self.reconstructions = None
+        self.loss = None
+        self.optimizer = None
+        self.train_op = None
 
 
     def __repr__(self):
@@ -41,20 +34,36 @@ class VisualVae:
         return res
 
 
-    def encode(self, images):
-        mean, logvar = None, None
-        return mean, logvar
-
-
     def reparameterize(self, means, logvars, epsilons):
         # batchsize, latent_dim (necessary while building graph)
         # eps = tf.random_normal(shape=(self.batch_size, self.latent_dim), mean=0., stddev=1.) if eps is None else eps
         return epsilons * tf.exp(logvars) + means
 
 
-    def decode(self, latents):
-        latents = None
-        return latents
+    def build_encoder(self, images, epsilons):
+        latents, means, logvars = None, None, None
+        return latents, means, logvars
+
+
+    def build_decoder(self, latents):
+        reconstructions = None
+        return reconstructions
+
+
+    def build(self):
+        self.latents, self.means, self.logvars = self.build_encoder(self.images, self.epsilons)
+        self.reconstructions = self.build_decoder(self.latents)
+        # set up loss
+        self.loss = self.calc_loss(self.images, self.reconstructions, self.means, self.logvars)
+        # set up optimizer
+        self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
+        # set up training operation
+        self.train_op = self.optimizer.minimize(self.loss)
+        # debug info
+        tf.summary.image('Original', self.images, max_outputs=4)
+        tf.summary.image('Reconstructions', self.reconstructions, max_outputs=4)
+        tf.summary.scalar('Loss', self.loss)
+        logging.info(self)
 
 
     def calc_loss(self, originals, reconstructions, means, logvars):
@@ -70,12 +79,12 @@ class VisualVae:
 
     def save(self, tf_session, path):
         save_path = tf.train.Saver().save(tf_session, path)
-        logging.info("Saved model to '%s'." % save_path)
+        logging.info("[VisualVae] Saved model to '%s'." % save_path)
 
 
     def restore(self, tf_session, path):
         tf.train.Saver().restore(tf_session, path)
-        logging.info("Restored model from '%s'." % path)
+        logging.info("[VisualVae] Restored model from '%s'." % path)
 
 
     def save_image(self, image_array, path):
@@ -91,9 +100,8 @@ class VisualVae:
         tf_session.run(tf.global_variables_initializer())
         # epoch training loop
         min_loss = None
-        while self.epoch < (max_epochs + 1):
+        while self.epoch < max_epochs:
             self.epoch += 1
-            self.is_training = True
             tf_session.run(train_iter.initializer)
             # iterate over batches
             avg_loss = 0.
@@ -116,7 +124,6 @@ class VisualVae:
             logging.info("\rCompleted epoch %d/%d (%d batches). avg_loss %.2f.%s" % (self.epoch, max_epochs, batch_idx, avg_loss, ' '*32))
 
             # check performance on test split
-            self.is_training = False
             valid_loss = self.test(tf_session, valid_iter, valid_next_op, out_path)
            
             # save latest model
@@ -130,7 +137,6 @@ class VisualVae:
 
 
     def test(self, tf_session, iterator, next_op, out_path, export_step=5):
-        self.is_training = False
         tf_session.run(iterator.initializer)
         # iterate over batches
         avg_loss = 0.
@@ -163,19 +169,20 @@ class CifarVae(VisualVae):
         super().__init__(img_height=32, img_width=32, img_depth=3, latent_dim=latent_dim, batch_size=batch_size, learning_rate=1e-4)
 
 
-    def encode(self, images):
+    def build_encoder(self, images, epsilons):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth))(images)
         conv1 = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(inputs)
         conv2 = tf.keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv1)
         conv3 = tf.keras.layers.Conv2D(filters=256, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv2)
         flat = tf.keras.layers.Flatten()(conv3)
         dense = tf.keras.layers.Dense(units=(self.img_height//8 * self.img_width//8 * 256), activation=tf.nn.relu)(flat)
-        mean = tf.keras.layers.Dense(self.latent_dim)(dense)
-        logvar = tf.keras.layers.Dense(self.latent_dim)(dense)
-        return mean, logvar
+        means = tf.keras.layers.Dense(self.latent_dim)(dense)
+        logvars = tf.keras.layers.Dense(self.latent_dim)(dense)
+        latents = self.reparameterize(means, logvars, self.epsilons)
+        return latents, means, logvars
 
 
-    def decode(self, latents):
+    def build_decoder(self, latents):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.latent_dim,))(latents)
         dense1 = tf.keras.layers.Dense(units=(self.img_height//8 * self.img_width//8 * 256), activation=tf.nn.relu)(inputs)
         shape = tf.keras.layers.Reshape(target_shape=(self.img_height//8, self.img_width//8, 256))(dense1)
@@ -191,17 +198,18 @@ class MnistVae(VisualVae):
         super().__init__(img_height=28, img_width=28, img_depth=1, latent_dim=latent_dim, batch_size=batch_size, learning_rate=1e-4)
 
 
-    def encode(self, images):
+    def build_encoder(self, images, epsilons):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth))(images)
         conv1 = tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(inputs)
         conv2 = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(conv1)
         flat = tf.keras.layers.Flatten()(conv2)
-        mean = tf.keras.layers.Dense(self.latent_dim)(flat)
-        logvar = tf.keras.layers.Dense(self.latent_dim)(flat)
-        return mean, logvar
+        means = tf.keras.layers.Dense(self.latent_dim)(flat)
+        logvars = tf.keras.layers.Dense(self.latent_dim)(flat)
+        latents = self.reparameterize(means, logvars, epsilons)
+        return latents, means, logvars
 
 
-    def decode(self, latents):
+    def build_decoder(self, latents):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.latent_dim,))(latents)
         dense = tf.keras.layers.Dense(units=7*7*32, activation=tf.nn.relu)(inputs)
         shape = tf.keras.layers.Reshape(target_shape=(7, 7, 32))(dense)
