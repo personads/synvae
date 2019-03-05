@@ -1,3 +1,6 @@
 matplotlib
 numpy
+Pillow
+pretty_midi
 tensorflow
+tensorflow-probability
