@@ -56,7 +56,6 @@ class MusicVae:
         self._inputs = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.input_depth])
         self._controls = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.control_depth])
         self._inputs_length = tf.placeholder(tf.int32, shape=[self.batch_size] + list(self._config.data_converter.length_shape))
-        self._max_length = tf.placeholder(tf.int32, shape=())
 
 
     def build_encoder(self, audios, lengths):
@@ -67,7 +66,10 @@ class MusicVae:
 
     def build_decoder(self, latents):
         audios, results = self.model.sample(self.batch_size, max_length=None, z=latents, c_input=None, temperature=self.temperature)
-        lengths = tf.reduce_sum(results.final_sequence_lengths, axis=1) # add up lengths of all n bars
+        lengths = results.final_sequence_lengths
+        # if hierarchical, add up lengths of all n bars
+        if len(lengths.shape) > 1:
+            lengths = tf.reduce_sum(lengths, axis=1) # add up lengths of all n bars
         return audios, lengths
 
 

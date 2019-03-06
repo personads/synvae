@@ -101,7 +101,7 @@ class SynestheticVae:
                     batch = tf_session.run(next_op)
                     batch_idx += 1
                     epsilons = np.random.normal(loc=0., scale=1., size=(batch.shape[0], self.latent_dim))
-                    temperature = 0.5
+                    temperature = 1.0
                     _, cur_loss = tf_session.run([self.train_op, self.loss], feed_dict={self.images: batch, self.epsilons: epsilons, self.temperature: temperature})
                     avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                     sys.stdout.write("\rEpoch %d/%d. Batch %d. avg_loss %.2f. cur_loss %.2f.   " % (self.epoch, max_epochs, batch_idx, avg_loss, cur_loss))
@@ -138,14 +138,15 @@ class SynestheticVae:
                 batch = tf_session.run(next_op)
                 batch_idx += 1
                 epsilons = np.zeros((batch.shape[0], self.latent_dim))
-                cur_loss, audios, reconstructions = tf_session.run([self.loss, self.audios, self.reconstructions], feed_dict={self.images: batch, self.epsilons: epsilons})
+                temperature = 1.0
+                cur_loss, audios, reconstructions = tf_session.run([self.loss, self.audios, self.reconstructions], feed_dict={self.images: batch, self.epsilons: epsilons, self.temperature: temperature})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                 # save original image and reconstruction
                 if (export_step > 0) and ((batch_idx-1) % export_step == 0):
                     if self.epoch == 1:
                         self.vis_model.save_image(batch[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_orig.png'))
                     self.vis_model.save_image(reconstructions[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_recon.png'))
-                    self.aud_model.save_midi(audios[0], os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '.midi'))
+                    self.aud_model.save_midi(audios[0], os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '.mid'))
             # end of dataset
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch
