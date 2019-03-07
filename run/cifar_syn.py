@@ -15,7 +15,7 @@ from experiments import *
 
 
 if __name__ == '__main__':
-    arg_parser = parse_arguments('CIFAR10 VAE')
+    arg_parser = parse_arguments('SynVAE (CIFAR10)')
     arg_parser.add_argument('cifar_path', help='path to CIFAR10')
     arg_parser.add_argument('musicvae_config', help='name of the MusicVAE model configuration (e.g. hierdec-mel_16bar)')
     arg_parser.add_argument('musicvae_path', help='path to MusicVAE model checkpoints')
@@ -27,7 +27,7 @@ if __name__ == '__main__':
     music_vae = MusicVae(config_name=args.musicvae_config, batch_size=args.batch_size)
     # set up visual model
     cifar_vae = CifarVae(latent_dim=music_vae.latent_dim, batch_size=args.batch_size)
-    # set up snesthetic model
+    # set up synesthetic model
     model = SynestheticVae(visual_model=cifar_vae, auditive_model=music_vae, learning_rate=1e-4)
     model.build()
 

@@ -70,6 +70,16 @@ class SynestheticVae:
         logging.info(self)
 
 
+    def save(self, tf_session, path):
+        save_path = tf.train.Saver().save(tf_session, path)
+        logging.info("[SynestheticVae] Saved model to '%s'." % save_path)
+
+
+    def restore(self, tf_session, path):
+        tf.train.Saver().restore(tf_session, path)
+        logging.info("[SynestheticVae] Restored model from '%s'." % path)
+
+
     def restore_auditive(self, tf_session, path):
         # remove music_vae scope prefix for loading pre-trained checkpoint
         var_map = {}
@@ -81,11 +91,6 @@ class SynestheticVae:
             # map to actual variable
             var_map[var_key] = mvae_var
         self.aud_model.restore(tf_session=tf_session, path=path, var_list=var_map)
-
-
-    def save(self, tf_session, path):
-        save_path = tf.train.Saver().save(tf_session, path)
-        logging.info("[SynestheticVae] Saved model to '%s'." % save_path)
 
 
     def train(self, tf_session, train_iter, valid_iter, max_epochs, model_path, out_path):
@@ -131,7 +136,7 @@ class SynestheticVae:
                 min_loss = valid_loss
 
 
-    def test(self, tf_session, iterator, next_op, out_path, export_step=20):
+    def test(self, tf_session, iterator, next_op, out_path, export_step=5):
         tf_session.run(iterator.initializer)
         # iterate over batches
         avg_loss = 0.
