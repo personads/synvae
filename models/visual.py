@@ -3,6 +3,7 @@ import logging, os, sys
 import numpy as np
 import PIL
 import tensorflow as tf
+import tensorflow_probability as tfp
 
 
 class VisualVae:
@@ -51,10 +52,14 @@ class VisualVae:
 
 
     def build(self):
-        self.latents, self.means, self.logvars = self.build_encoder(self.images, self.epsilons)
+        # self.latents, self.means, self.logvars = self.build_encoder(self.images, self.epsilons)
+        self.means, self.logvars = self.build_encoder(self.images, self.epsilons)
+        self.latent_dist = tfp.distributions.MultivariateNormalDiag(loc=self.means, scale_diag=self.logvars)
+        self.latents = self.latent_dist.sample()
         self.reconstructions = self.build_decoder(self.latents)
         # set up loss
-        self.loss = self.calc_loss(self.images, self.reconstructions, self.means, self.logvars)
+        # self.loss = self.calc_loss(self.images, self.reconstructions, self.means, self.logvars)
+        self.loss = self.calc_loss(self.images, self.reconstructions, self.latent_dist)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
@@ -66,14 +71,17 @@ class VisualVae:
         logging.info(self)
 
 
-    def calc_loss(self, originals, reconstructions, means, logvars):
+    def calc_loss(self, originals, reconstructions, latent_dist):
         originals_flat = tf.reshape(originals, (-1, self.img_height * self.img_width * self.img_depth))
         reconstructions_flat = tf.reshape(reconstructions, (-1, self.img_height * self.img_width * self.img_depth))
 
         recon_loss = tf.reduce_sum(tf.square(originals_flat - reconstructions_flat), axis=1) # MSE
         # recon_loss = tf.reduce_sum(tf.keras.backend.abs(originals_flat - reconstructions_flat), axis=1) #L1
-        latent_loss = - 0.5 * tf.reduce_sum(1 + logvars - tf.square(means) - tf.exp(logvars), axis=1)
-        loss = tf.reduce_mean(recon_loss + latent_loss)
+        # latent_loss = - 0.5 * tf.reduce_sum(1 + logvars - tf.square(means) - tf.exp(logvars), axis=1)
+
+        prior_dist = tfp.distributions.MultivariateNormalDiag(loc=[0.] * self.latent_dim, scale_diag=[1.] * self.latent_dim)
+        latent_loss = tfp.distributions.kl_divergence(latent_dist, prior_dist)
+        loss = tf.reduce_mean(recon_loss) + tf.reduce_mean(latent_loss)
         return loss
 
 
@@ -96,8 +104,6 @@ class VisualVae:
         merge_op = tf.summary.merge_all()
         next_op = train_iter.get_next()
         valid_next_op = valid_iter.get_next()
-        # initialize variables
-        tf_session.run(tf.global_variables_initializer())
         # epoch training loop
         min_loss = None
         while self.epoch < max_epochs:
@@ -178,8 +184,8 @@ class CifarVae(VisualVae):
         dense = tf.keras.layers.Dense(units=(self.img_height//8 * self.img_width//8 * 256), activation=tf.nn.relu)(flat)
         means = tf.keras.layers.Dense(self.latent_dim)(dense)
         logvars = tf.keras.layers.Dense(self.latent_dim)(dense)
-        latents = self.reparameterize(means, logvars, self.epsilons)
-        return latents, means, logvars
+        # latents = self.reparameterize(means, logvars, self.epsilons)
+        return means, logvars
 
 
     def build_decoder(self, latents):
@@ -205,8 +211,8 @@ class MnistVae(VisualVae):
         flat = tf.keras.layers.Flatten()(conv2)
         means = tf.keras.layers.Dense(self.latent_dim)(flat)
         logvars = tf.keras.layers.Dense(self.latent_dim)(flat)
-        latents = self.reparameterize(means, logvars, epsilons)
-        return latents, means, logvars
+        # latents = self.reparameterize(means, logvars, epsilons)
+        return means, logvars
 
 
     def build_decoder(self, latents):
