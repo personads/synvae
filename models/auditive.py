@@ -14,7 +14,7 @@ class MusicVae:
         self.batch_size = batch_size
         # load config
         self._config = copy.deepcopy(configs.CONFIG_MAP[config_name])
-        self._config.hparams.use_cudnn = tf.test.is_gpu_available() # enable cuDNN if available
+        # self._config.hparams.use_cudnn = tf.test.is_gpu_available() # enable cuDNN if available
         self.music_length = self._config.data_converter.length_shape
         self.latent_dim = self._config.hparams.z_size
         # build model

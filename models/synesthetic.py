@@ -142,9 +142,6 @@ class SynestheticVae:
             # iterate over batches
             avg_loss = 0.
             batch_idx = 0
-            # DEBUG export weights
-            self.export_weights(tf_session, os.path.join(out_path, 'weights_e' + str(self.epoch) + '.txt'))
-            # END DEBUG
             while True:
                 try:
                     batch = tf_session.run(next_op)
