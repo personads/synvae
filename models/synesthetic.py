@@ -83,6 +83,11 @@ class SynestheticVae:
         self.aud_model.restore(tf_session=tf_session, path=path, var_list=var_map)
 
 
+    def save(self, tf_session, path):
+        save_path = tf.train.Saver().save(tf_session, path)
+        logging.info("[SynestheticVae] Saved model to '%s'." % save_path)
+
+
     def train(self, tf_session, train_iter, valid_iter, max_epochs, model_path, out_path):
         next_op = train_iter.get_next()
         valid_next_op = valid_iter.get_next()
