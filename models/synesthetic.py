@@ -93,7 +93,43 @@ class SynestheticVae:
         self.aud_model.restore(tf_session=tf_session, path=path, var_list=var_map)
 
 
+    # DEBUG function
+    def export_weights(self, tf_session, path):
+        with open(path, 'w', encoding='utf8') as fop:
+            # export and save weights
+            # check fixed weights
+            fop.write('-'*16 + 'FIXED' + '-'*16 + '\n')
+            var_vals = tf_session.run(self.fixed_variables)
+            for var, val in zip(self.fixed_variables, var_vals):
+                self.weight_vals[var.name] = self.weight_vals.get(var.name, []) + [val]
+                # check integrity
+                update_state = 'init'
+                if len(self.weight_vals[var.name]) > 1:
+                    update_state = 'changed'
+                    if np.array_equal(self.weight_vals[var.name][-1], self.weight_vals[var.name][-2]):
+                        update_state = 'unchanged'
+                # write to file
+                fop.write('(' + update_state + ') ' + var.name + ': ' + str(val) + '\n')
+            # check trainable variables
+            fop.write('-'*16 + 'TRAINABLE' + '-'*16 + '\n')
+            var_vals = tf_session.run(self.train_variables)
+            for var, val in zip(self.train_variables, var_vals):
+                self.weight_vals[var.name] = self.weight_vals.get(var.name, []) + [val]
+                # check integrity
+                update_state = 'init'
+                if len(self.weight_vals[var.name]) > 1:
+                    update_state = 'changed'
+                    if np.array_equal(self.weight_vals[var.name][-1], self.weight_vals[var.name][-2]):
+                        update_state = 'unchanged'
+                # write to file
+                fop.write('(' + update_state + ') ' + var.name + ': ' + str(val) + '\n')
+    # END DEBUG function
+
+
     def train(self, tf_session, train_iter, valid_iter, max_epochs, model_path, out_path):
+        # DEBUG
+        self.weight_vals = {}
+        # END DEBUG
         next_op = train_iter.get_next()
         valid_next_op = valid_iter.get_next()
         # initialize variables
@@ -106,6 +142,9 @@ class SynestheticVae:
             # iterate over batches
             avg_loss = 0.
             batch_idx = 0
+            # DEBUG export weights
+            self.export_weights(tf_session, os.path.join(out_path, 'weights_e' + str(self.epoch) + '.txt'))
+            # END DEBUG
             while True:
                 try:
                     batch = tf_session.run(next_op)
