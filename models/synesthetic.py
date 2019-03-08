@@ -148,9 +148,13 @@ class SynestheticVae:
                     batch_idx += 1
                     epsilons = np.random.normal(loc=0., scale=1., size=(batch.shape[0], self.latent_dim))
                     temperature = 1.0
-                    _, cur_loss = tf_session.run([self.train_op, self.loss], feed_dict={self.images: batch, self.epsilons: epsilons, self.temperature: temperature})
+                    _, cur_loss, vis_latents, aud_latents = tf_session.run([self.train_op, self.loss,self.vis_latents, self.aud_latents], feed_dict={self.images: batch, self.epsilons: epsilons, self.temperature: temperature})
+                    # DBG latent difference
+                    latent_diffs = np.absolute(vis_latents - aud_latents)
+                    avg_latent_diff = np.mean(np.mean(latent_diffs, axis=1))
+                    # END DBG
                     avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
-                    sys.stdout.write("\rEpoch %d/%d. Batch %d. avg_loss %.2f. cur_loss %.2f.   " % (self.epoch, max_epochs, batch_idx, avg_loss, cur_loss))
+                    sys.stdout.write("\rEpoch %d/%d. Batch %d. avg_loss %.2f. cur_loss %.2f. avg_latent_diff %.4f   " % (self.epoch, max_epochs, batch_idx, avg_loss, cur_loss, avg_latent_diff))
                     sys.stdout.flush()
                 # end of dataset
                 except tf.errors.OutOfRangeError:
