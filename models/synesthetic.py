@@ -63,7 +63,8 @@ class SynestheticVae:
         self.reconstructions, self.aud_latents = self.build_decoder(self.audios, self.aud_lengths)
         # only get variables relevant to visual vae
         self.train_variables = tf.trainable_variables(scope='visual_vae')
-        self.fixed_variables = tf.trainable_variables(scope='music_vae')
+        # self.fixed_variables = tf.trainable_variables(scope='music_vae')
+        self.fixed_variables = [var for var in tf.trainable_variables() if var not in self.train_variables]
         # set up loss calculation
         self.loss = self.vis_model.calc_loss(self.images, self.reconstructions, self.vis_means, self.vis_logvars)
         # set up optimizer
@@ -88,8 +89,10 @@ class SynestheticVae:
         # remove music_vae scope prefix for loading pre-trained checkpoint
         var_map = {}
         for mvae_var in self.fixed_variables:
-            # remove top level scope
-            var_key = '/'.join(mvae_var.name.split('/')[1:])
+            # remove top level scope if present
+            var_key = mvae_var.name
+            if mvae_var.name.startswith('music_vae'):
+                var_key = '/'.join(var_key.split('/')[1:])
             # remove device id
             var_key = var_key.split(':')[0]
             # map to actual variable
