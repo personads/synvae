@@ -17,9 +17,21 @@ class MusicVae:
         # self._config.hparams.use_cudnn = tf.test.is_gpu_available() # enable cuDNN if available
         self.music_length = self._config.data_converter.length_shape
         self.latent_dim = self._config.hparams.z_size
-        # build model
-        self.build_core()
-        # set up encoding and decoding operations
+        # set up placeholders
+        self.temperature = tf.placeholder(tf.float32, shape=())
+        if self._config.hparams.z_size:
+            self._z_input = tf.placeholder(tf.float32, shape=[self.batch_size, self._config.hparams.z_size])
+        else:
+            self._z_input = None
+        if self._config.data_converter.control_depth > 0:
+            self._c_input = tf.placeholder(
+            tf.float32, shape=[None, self._config.data_converter.control_depth])
+        else:
+            self._c_input = None
+        self._inputs = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.input_depth])
+        self._controls = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.control_depth])
+        self._inputs_length = tf.placeholder(tf.int32, shape=[self.batch_size] + list(self._config.data_converter.length_shape))
+        # set up encoding and decoding operation placeholders
         self.latents = None
         self.audios, self.lengths = None, None
 
@@ -40,37 +52,15 @@ class MusicVae:
         self.model = self._config.model
         self.model.build(self._config.hparams, self._config.data_converter.output_depth, is_training=False)
 
-        # set up placeholders
-        self.temperature = tf.placeholder(tf.float32, shape=())
-
-        if self._config.hparams.z_size:
-            self._z_input = tf.placeholder(tf.float32, shape=[self.batch_size, self._config.hparams.z_size])
-        else:
-            self._z_input = None
-
-        if self._config.data_converter.control_depth > 0:
-            self._c_input = tf.placeholder(
-            tf.float32, shape=[None, self._config.data_converter.control_depth])
-        else:
-            self._c_input = None
-
-        self._inputs = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.input_depth])
-        self._controls = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.control_depth])
-        self._inputs_length = tf.placeholder(tf.int32, shape=[self.batch_size] + list(self._config.data_converter.length_shape))
-
 
     def build_encoder(self, audios, lengths):
         dist = self.model.encode(audios, lengths)
-        # latents = dist.sample()
-        latents = dist.loc
+        latents = dist.sample()
         return latents
 
 
     def build_decoder(self, latents):
         audios, results = self.model.sample(self.batch_size, z=latents, temperature=self.temperature)
-        # print("audio samples:", audios)
-        # audios = results.rnn_output
-        # print("rnn_output:", audios)
         lengths = results.final_sequence_lengths
         # if hierarchical, add up lengths of all n bars
         if len(lengths.shape) > 1:
@@ -79,6 +69,7 @@ class MusicVae:
 
 
     def build(self):
+        self.build_core()
         self.latents = self.build_encoder(self._inputs, self._inputs_length)
         self.audios, self.lengths = self.build_decoder(self._z_input)
         # debug info
