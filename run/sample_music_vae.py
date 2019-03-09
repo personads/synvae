@@ -13,6 +13,9 @@ from models.auditive import MusicVae
 config_name = 'hierdec-mel_16bar'
 checkpoint_path = '/mnt/d/thesis/models/hierdec-mel_16bar.ckpt'
 output_dir = '/mnt/d/thesis/exp/music_vae_dbg_mel16'
+# config_name = 'cat-mel_2bar_big'
+# checkpoint_path = '/mnt/d/thesis/models/cat-mel_2bar_big.ckpt'
+# output_dir = '/mnt/d/thesis/exp/music_vae_dbg_mel2'
 num_samples = 5
 temperature = 0.5
 
@@ -34,7 +37,7 @@ with tf.Session() as sess:
         (config_name, 'sample', date_and_time, num_samples))
     print('Outputting %d files as `%s`...' % (num_samples, basename))
 
-    for i, ns in enumerate(results):
-        music.sequence_proto_to_midi_file(ns, basename.replace('*', '%03d' % i))
+    for i, audio_tensor in enumerate(results):
+        model.save_midi(audio_tensor, basename.replace('*', '%03d' % i))
 
 print('Done.')

@@ -27,7 +27,7 @@ class SynestheticVae:
         res  = '<SynestheticVae: '
         res += str(self.images.shape[1:])
         res += ' -> ' + str(self.vis_latents.shape[1])
-        res += ' -> ♪'
+        res += ' -> ♪ (%d steps)' % self.aud_model.music_length
         res += ' -> ' + str(self.aud_latents.shape[1])
         res += ' -> ' + str(self.reconstructions.shape[1:])
         res += '>'

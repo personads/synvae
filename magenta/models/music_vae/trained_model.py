@@ -51,8 +51,9 @@ class TrainedModel(object):
       call.
   """
 
-  def __init__(self, config, batch_size, checkpoint_path=None,
+  def __init__(self, config, batch_size, checkpoint_dir_or_path=None,
                var_name_substitutions=None, session_target='', **sample_kwargs):
+    checkpoint_path = checkpoint_dir_or_path
     self._config = copy.deepcopy(config)
     self._config.hparams.batch_size = batch_size
     with tf.Graph().as_default():
@@ -114,10 +115,7 @@ class TrainedModel(object):
       # Restore graph
       self._sess = tf.Session(target=session_target)
       saver = tf.train.Saver(var_map)
-      if os.path.exists(checkpoint_path):
-          saver.restore(self._sess, checkpoint_path)
-      else:
-        saver.restore(self._sess, checkpoint_path)
+      saver.restore(self._sess, checkpoint_path)
 
   def sample(self, n=None, length=None, temperature=1.0, same_z=False,
              c_input=None):
@@ -160,6 +158,8 @@ class TrainedModel(object):
 
     if self._c_input is not None:
       feed_dict[self._c_input] = c_input
+
+    print("feed_dict:", feed_dict)
 
     outputs = []
     for _ in range(int(np.ceil(n / batch_size))):

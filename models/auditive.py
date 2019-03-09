@@ -15,7 +15,7 @@ class MusicVae:
         # load config
         self._config = copy.deepcopy(configs.CONFIG_MAP[config_name])
         # self._config.hparams.use_cudnn = tf.test.is_gpu_available() # enable cuDNN if available
-        self.music_length = self._config.data_converter.length_shape
+        self.music_length = self._config.hparams.max_seq_len
         self.latent_dim = self._config.hparams.z_size
         # set up placeholders
         self.temperature = tf.placeholder(tf.float32, shape=(), name='temperature')
@@ -30,6 +30,7 @@ class MusicVae:
             self._c_input = None
         self._inputs = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.input_depth])
         self._controls = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.control_depth])
+        self.max_length = tf.constant(self.music_length, tf.int32)
         self._inputs_length = tf.placeholder(tf.int32, shape=[self.batch_size] + list(self._config.data_converter.length_shape))
         # set up encoding and decoding operation placeholders
         self.latents = None
@@ -38,9 +39,9 @@ class MusicVae:
 
     def __repr__(self):
         res  = '<MusicVae: '
-        res += str(self.music_length)
+        res += ' ♪ (%d steps)' % self.music_length
         res += ' -> ' + str(self.latent_dim)
-        res += ' -> ♪'
+        res += ' -> ♪ (%d steps)' % self.music_length
         res += '>'
         return res
 
@@ -60,7 +61,7 @@ class MusicVae:
 
 
     def build_decoder(self, latents):
-        audios, results = self.model.sample(self.batch_size, z=latents, temperature=self.temperature)
+        audios, results = self.model.sample(self.batch_size, z=latents, max_length=self.max_length, temperature=self.temperature, c_input=self._c_input)
         lengths = results.final_sequence_lengths
         # if hierarchical, add up lengths of all n bars
         if len(lengths.shape) > 1:
@@ -95,9 +96,6 @@ class MusicVae:
 
         outputs = []
         for _ in range(int(np.ceil(num_samples / self.batch_size))):
-            cur_output = tf_session.run([self.audios], feed_dict)
-            outputs.append(cur_output)
-        # truncate batch to number of samples
+            outputs.append(tf_session.run(self.audios, feed_dict))
         samples = np.vstack(outputs)[:num_samples]
-
-        return self._config.data_converter.to_items(samples)
+        return samples
