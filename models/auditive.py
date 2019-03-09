@@ -51,7 +51,7 @@ class MusicVae:
         self._config.hparams.batch_size = self.batch_size
         self._config.data_converter.max_tensors_per_item = None
         self.model = self._config.model
-        self.model.build(self._config.hparams, self._config.data_converter.output_depth, is_training=False)
+        self.model.build(self._config.hparams, self._config.data_converter.output_depth, is_training=True)
 
 
     def build_encoder(self, audios, lengths):

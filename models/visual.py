@@ -60,7 +60,7 @@ class VisualVae:
         # set up training operation
         self.train_op = self.optimizer.minimize(self.loss)
         # debug info
-        tf.summary.image('Original', self.images, max_outputs=4)
+        tf.summary.image('Originals', self.images, max_outputs=4)
         tf.summary.image('Reconstructions', self.reconstructions, max_outputs=4)
         tf.summary.scalar('Loss', self.loss)
         logging.info(self)
