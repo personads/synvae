@@ -37,6 +37,8 @@ if __name__ == '__main__':
 
     epochs = args.epochs
     with tf.Session() as sess:
+        # initialize variables
+        sess.run(tf.global_variables_initializer())
         # initialize FileWriter for TensorBoard
         tf_writer = tf.summary.FileWriter(tb_path, graph=sess.graph)
         # initialize variables

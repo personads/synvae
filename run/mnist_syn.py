@@ -52,7 +52,11 @@ if __name__ == '__main__':
 
     epochs = args.epochs
     with tf.Session() as sess:
+        # initialize variables
+        sess.run(tf.global_variables_initializer())
+        # restore MusicVAE
         model.restore_auditive(tf_session=sess, path=args.musicvae_path)
+        # set up TensorBoard writer
         tf_writer = tf.summary.FileWriter(tb_path, graph=sess.graph)
         # training loop
         model.train(sess, train_iterator, test_iterator, epochs, model_path, out_path, tf_writer)

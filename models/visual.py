@@ -96,8 +96,6 @@ class VisualVae:
         merge_op = tf.summary.merge_all()
         next_op = train_iter.get_next()
         valid_next_op = valid_iter.get_next()
-        # initialize variables
-        tf_session.run(tf.global_variables_initializer())
         # epoch training loop
         min_loss = None
         while self.epoch < max_epochs:
