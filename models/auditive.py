@@ -54,8 +54,8 @@ class MusicVae:
 
 
     def build_encoder(self, audios, lengths):
-        dist = self.model.encode(audios, lengths)
-        latents = dist.sample()
+        dist, mus, sigmas = self.model.encode(audios, lengths)
+        latents = mus
         return latents
 
 

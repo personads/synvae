@@ -209,7 +209,7 @@ class MusicVAE(object):
         name='encoder/sigma',
         kernel_initializer=tf.random_normal_initializer(stddev=0.001))
 
-    return ds.MultivariateNormalDiag(loc=mu, scale_diag=sigma)
+    return ds.MultivariateNormalDiag(loc=mu, scale_diag=sigma), mu, sigma
 
   def _compute_model_loss(
       self, input_sequence, output_sequence, sequence_length, control_sequence):

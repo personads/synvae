@@ -97,6 +97,17 @@ class SynestheticVae:
             var_key = var_key.split(':')[0]
             # map to actual variable
             var_map[var_key] = mvae_var
+        # # DBG Print variables
+        # ckpt_vars = sorted([name for name, _ in tf.train.list_variables(path)])
+        # model_vars = sorted(list(var_map.keys()))
+        # global_vars = sorted([v.name for v in tf.global_variables()])
+        # print("---- checkpoint variables ----")
+        # print("\n".join(ckpt_vars))
+        # print("---- music variables ----")
+        # print("\n".join(model_vars))
+        # print("---- global variables ----")
+        # print("\n".join(global_vars))
+        # # END DBG
         self.aud_model.restore(tf_session=tf_session, path=path, var_list=var_map)
 
 
