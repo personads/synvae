@@ -15,8 +15,8 @@ class VisualVae:
         self.batch_size = batch_size
         self.epoch = 0
         # set up computation graph
-        self.images = tf.placeholder(tf.float32, [self.batch_size, self.img_height, self.img_width, self.img_depth])
-        self.epsilons = tf.placeholder(tf.float32, [self.batch_size, self.latent_dim])
+        self.images = tf.placeholder(tf.float32, [self.batch_size, self.img_height, self.img_width, self.img_depth], name='images')
+        self.epsilons = tf.placeholder(tf.float32, [self.batch_size, self.latent_dim], name='epsilons')
         # set up remaining operation placeholders
         self.latents, self.means, self.logvars = None, None, None
         self.reconstructions = None

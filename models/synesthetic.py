@@ -72,6 +72,9 @@ class SynestheticVae:
         # set up training operation
         self.train_op = self.optimizer.minimize(self.loss, var_list=self.train_variables)
         # debug info
+        tf.summary.image('Original', self.images, max_outputs=4)
+        tf.summary.image('Reconstructions', self.reconstructions, max_outputs=4)
+        tf.summary.scalar('Loss', self.loss)
         logging.info(self)
 
 
@@ -144,10 +147,12 @@ class SynestheticVae:
     # END DEBUG function
 
 
-    def train(self, tf_session, train_iter, valid_iter, max_epochs, model_path, out_path):
+    def train(self, tf_session, train_iter, valid_iter, max_epochs, model_path, out_path, tf_writer):
         # DEBUG
-        self.weight_vals = {}
+        # self.weight_vals = {}
         # END DEBUG
+        # set up training specific ops
+        merge_op = tf.summary.merge_all()
         next_op = train_iter.get_next()
         valid_next_op = valid_iter.get_next()
         # initialize variables
@@ -166,7 +171,7 @@ class SynestheticVae:
                     batch_idx += 1
                     epsilons = np.random.normal(loc=0., scale=1., size=(batch.shape[0], self.latent_dim))
                     temperature = 0.5
-                    _, cur_loss, vis_latents, aud_latents = tf_session.run([self.train_op, self.loss,self.vis_latents, self.aud_latents], feed_dict={self.images: batch, self.epsilons: epsilons, self.temperature: temperature})
+                    _, cur_loss, summaries, vis_latents, aud_latents = tf_session.run([self.train_op, self.loss, merge_op, self.vis_latents, self.aud_latents], feed_dict={self.images: batch, self.epsilons: epsilons, self.temperature: temperature})
                     # DBG latent difference
                     latent_diffs = np.absolute(vis_latents - aud_latents)
                     avg_latent_diff = np.mean(np.mean(latent_diffs, axis=1))
@@ -179,6 +184,7 @@ class SynestheticVae:
                     # exit batch loop and proceed to next epoch
                     break
             # write epoch summary
+            tf_writer.add_summary(summaries, self.epoch)
             logging.info("\rCompleted epoch %d/%d (%d batches). avg_loss %.2f.%s" % (self.epoch, max_epochs, batch_idx, avg_loss, ' '*32))
 
             # check performance on test split

@@ -18,9 +18,9 @@ class MusicVae:
         self.music_length = self._config.data_converter.length_shape
         self.latent_dim = self._config.hparams.z_size
         # set up placeholders
-        self.temperature = tf.placeholder(tf.float32, shape=())
+        self.temperature = tf.placeholder(tf.float32, shape=(), name='temperature')
         if self._config.hparams.z_size:
-            self._z_input = tf.placeholder(tf.float32, shape=[self.batch_size, self._config.hparams.z_size])
+            self._z_input = tf.placeholder(tf.float32, shape=[self.batch_size, self._config.hparams.z_size], name='aud_latents')
         else:
             self._z_input = None
         if self._config.data_converter.control_depth > 0:
@@ -54,8 +54,8 @@ class MusicVae:
 
 
     def build_encoder(self, audios, lengths):
-        dist, mus, sigmas = self.model.encode(audios, lengths)
-        latents = mus
+        dist = self.model.encode(audios, lengths)
+        latents = dist.sample()
         return latents
 
 

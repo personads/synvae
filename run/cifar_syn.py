@@ -48,5 +48,6 @@ if __name__ == '__main__':
     epochs = args.epochs
     with tf.Session() as sess:
         model.restore_auditive(tf_session=sess, path=args.musicvae_path)
+        tf_writer = tf.summary.FileWriter(tb_path, graph=sess.graph)
         # training loop
-        model.train(sess, train_iterator, valid_iterator, epochs, model_path, out_path)
+        model.train(sess, train_iterator, valid_iterator, epochs, model_path, out_path, tf_writer)
