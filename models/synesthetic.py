@@ -168,7 +168,7 @@ class SynestheticVae:
                     batch = tf_session.run(next_op)
                     batch_idx += 1
                     epsilons = np.random.normal(loc=0., scale=1., size=(batch.shape[0], self.latent_dim))
-                    temperature = 0.1
+                    temperature = 0.5
                     _, cur_loss, summaries, vis_latents, aud_latents = tf_session.run([self.train_op, self.loss, merge_op, self.vis_latents, self.aud_latents], feed_dict={self.images: batch, self.epsilons: epsilons, self.temperature: temperature})
                     # DBG latent difference
                     latent_diffs = np.absolute(vis_latents - aud_latents)
@@ -210,7 +210,7 @@ class SynestheticVae:
                 batch = tf_session.run(next_op)
                 batch_idx += 1
                 epsilons = np.zeros((batch.shape[0], self.latent_dim))
-                temperature = 0.1
+                temperature = 0.5
                 cur_loss, audios, reconstructions = tf_session.run([self.loss, self.audios, self.reconstructions], feed_dict={self.images: batch, self.epsilons: epsilons, self.temperature: temperature})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                 # save original image and reconstruction

@@ -61,7 +61,9 @@ class MusicVae:
 
 
     def build_decoder(self, latents):
-        audios, results = self.model.sample(self.batch_size, z=latents, max_length=self.max_length, temperature=self.temperature, c_input=self._c_input)
+        # audios, results = self.model.sample(self.batch_size, z=latents, max_length=self.max_length, temperature=self.temperature, c_input=self._c_input)
+        results = self.model.decoder.decode(z=latents, max_length=self.max_length)
+        audios = results.rnn_output
         lengths = results.final_sequence_lengths
         # if hierarchical, add up lengths of all n bars
         if len(lengths.shape) > 1:

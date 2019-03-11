@@ -398,6 +398,36 @@ class BaseLstmDecoder(base_model.BaseDecoder):
 
     return results
 
+  def decode(self, z, max_length):
+    """[Custom] Decoding function separated from training procedure"""
+    batch_size = z.shape[0]
+
+    # set inputs to 0 (since there aren't any)
+    plc_inputs = tf.zeros([batch_size, max_length, self._output_depth], dtype=tf.float32)
+    # # concatenate conditional z
+    # plc_inputs = tf.concat([plc_inputs, z], axis=-1)
+    # set lengths to max_length since all inputs should decode until the end
+    plc_lengths = tf.ones([batch_size], tf.int32) * max_length
+
+    # repeat z across the full output length [z_0, ..., z_n, z_0, ..., z_n]
+    repeated_z = tf.tile(tf.expand_dims(z, axis=1), [1, max_length, 1])
+
+    # auxilary inputs which are concatenated to RNN output at each step (containing z for each step)
+    auxiliary_inputs = tf.zeros([batch_size, max_length, 0])
+    auxiliary_inputs = tf.concat([auxiliary_inputs, repeated_z], axis=2)
+
+    # Use scheduled sampling with RNN outputs only
+    helper = seq2seq.ScheduledOutputTrainingHelper(
+        inputs=plc_inputs,
+        sequence_length=plc_lengths,
+        auxiliary_inputs=auxiliary_inputs,
+        sampling_probability=tf.constant(1.0), # set to 1 to sample from outputs only
+        next_inputs_fn=None) # set to None to sample from outputs only
+
+    results = self._decode(z, helper=helper, input_shape=helper.inputs.shape[2:], max_length=max_length)
+
+    return results
+
   def reconstruction_loss(self, x_input, x_target, x_length, z=None,
                           c_input=None):
     """Reconstruction loss calculation.
