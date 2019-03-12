@@ -3,6 +3,7 @@ import logging, os, sys
 import numpy as np
 import PIL
 import tensorflow as tf
+import tensorflow_probability as tfp
 
 
 class VisualVae:
@@ -34,8 +35,8 @@ class VisualVae:
         return res
 
 
-    def reparameterize(self, means, logvars, epsilons):
-        return epsilons * tf.exp(logvars) + means
+    def reparameterize(self, mus, sigmas, epsilons):
+        return epsilons * sigmas + mus
 
 
     def build_encoder(self, images, epsilons):
@@ -64,13 +65,18 @@ class VisualVae:
         logging.info(self)
 
 
-    def calc_loss(self, originals, reconstructions, means, logvars):
+    def calc_loss(self, originals, reconstructions, mus, sigmas):
         originals_flat = tf.reshape(originals, (-1, self.img_height * self.img_width * self.img_depth))
         reconstructions_flat = tf.reshape(reconstructions, (-1, self.img_height * self.img_width * self.img_depth))
 
         recon_loss = tf.reduce_sum(tf.square(originals_flat - reconstructions_flat), axis=1) # MSE
+
         # recon_loss = tf.reduce_sum(tf.keras.backend.abs(originals_flat - reconstructions_flat), axis=1) #L1
-        latent_loss = - 0.5 * tf.reduce_sum(1 + logvars - tf.square(means) - tf.exp(logvars), axis=1)
+        # latent_loss = - 0.5 * tf.reduce_sum(1 + logvars - tf.square(means) - tf.exp(logvars), axis=1)
+        prior_dist = tfp.distributions.MultivariateNormalDiag(loc=[0.] * self.latent_dim, scale_diag=[1.] * self.latent_dim)
+        latent_dist = tfp.distributions.MultivariateNormalDiag(loc=mus, scale_diag=sigmas)
+        latent_loss = tfp.distributions.kl_divergence(latent_dist, prior_dist)
+
         loss = tf.reduce_mean(recon_loss + latent_loss)
         return loss
 
