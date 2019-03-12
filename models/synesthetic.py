@@ -15,7 +15,8 @@ class SynestheticVae:
         self.images = self.vis_model.images
         self.epsilons = self.vis_model.epsilons
         self.temperature = self.aud_model.temperature
-        self.audios, self.aud_lengths, self.vis_latents, self.vis_means, self.vis_logvars = None, None, None, None, None
+        self.audios, self.aud_dists, self.aud_lengths = None, None, None
+        self.vis_latents, self.vis_means, self.vis_logvars = None, None, None
         self.reconstructions, self.aud_latents = None, None
         self.train_variables = None
         self.loss = None
@@ -40,14 +41,14 @@ class SynestheticVae:
             vis_latents, vis_means, vis_logvars = self.vis_model.build_encoder(images, epsilons)
         # audio decoding step
         with tf.variable_scope('music_vae_decoder'):
-            audios, lengths = self.aud_model.build_decoder(vis_latents)
-        return audios, lengths, vis_latents, vis_means, vis_logvars
+            audios, aud_dists, lengths = self.aud_model.build_decoder(vis_latents)
+        return audios, aud_dists, lengths, vis_latents, vis_means, vis_logvars
 
 
-    def build_decoder(self, audios, lengths):
+    def build_decoder(self, aud_dists, lengths, epsilons):
         # audio encoding step
         with tf.variable_scope('music_vae_encoder'):
-            aud_latents = self.aud_model.build_encoder(audios, lengths)
+            aud_latents = self.aud_model.build_encoder(aud_dists, lengths, epsilons)
         # visual decoding step
         with tf.variable_scope('visual_vae_decoder'):
             vis_recons = self.vis_model.build_decoder(aud_latents)
@@ -59,8 +60,8 @@ class SynestheticVae:
         with tf.variable_scope('music_vae_core'):
             self.aud_model.build_core()
         # set up synesthetic encoder and decoder
-        self.audios, self.aud_lengths, self.vis_latents, self.vis_means, self.vis_logvars = self.build_encoder(self.images, self.epsilons)
-        self.reconstructions, self.aud_latents = self.build_decoder(self.audios, self.aud_lengths)
+        self.audios, self.aud_dists, self.aud_lengths, self.vis_latents, self.vis_means, self.vis_logvars = self.build_encoder(self.images, self.epsilons)
+        self.reconstructions, self.aud_latents = self.build_decoder(self.aud_dists, self.aud_lengths, self.epsilons)
         # only get variables relevant to visual vae
         self.train_variables = tf.trainable_variables(scope='visual_vae')
         # self.fixed_variables = tf.trainable_variables(scope='music_vae')

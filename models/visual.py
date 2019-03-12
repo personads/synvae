@@ -16,7 +16,7 @@ class VisualVae:
         self.epoch = 0
         # set up computation graph
         self.images = tf.placeholder(tf.float32, [self.batch_size, self.img_height, self.img_width, self.img_depth], name='images')
-        self.epsilons = tf.placeholder(tf.float32, [self.batch_size, self.latent_dim], name='epsilons')
+        self.epsilons = tf.placeholder(tf.float32, [self.batch_size, self.latent_dim], name='vis_epsilons')
         # set up remaining operation placeholders
         self.latents, self.means, self.logvars = None, None, None
         self.reconstructions = None
@@ -35,8 +35,6 @@ class VisualVae:
 
 
     def reparameterize(self, means, logvars, epsilons):
-        # batchsize, latent_dim (necessary while building graph)
-        # eps = tf.random_normal(shape=(self.batch_size, self.latent_dim), mean=0., stddev=1.) if eps is None else eps
         return epsilons * tf.exp(logvars) + means
 
 
@@ -176,7 +174,7 @@ class CifarVae(VisualVae):
         dense = tf.keras.layers.Dense(units=(self.img_height//8 * self.img_width//8 * 256), activation=tf.nn.relu)(flat)
         means = tf.keras.layers.Dense(self.latent_dim)(dense)
         logvars = tf.keras.layers.Dense(self.latent_dim)(dense)
-        latents = self.reparameterize(means, logvars, self.epsilons)
+        latents = self.reparameterize(means, logvars, epsilons)
         return latents, means, logvars
 
 

@@ -32,9 +32,10 @@ class MusicVae:
         self._controls = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.control_depth])
         self.max_length = tf.constant(self.music_length, tf.int32)
         self._inputs_length = tf.placeholder(tf.int32, shape=[self.batch_size] + list(self._config.data_converter.length_shape))
+        self.epsilons = tf.placeholder(tf.float32, [self.batch_size, self.latent_dim], name='aud_epsilons')
         # set up encoding and decoding operation placeholders
         self.latents = None
-        self.audios, self.lengths = None, None
+        self.audios, self.aud_dists, self.lengths = None, None, None
 
 
     def __repr__(self):
@@ -46,6 +47,10 @@ class MusicVae:
         return res
 
 
+    def reparameterize(self, means, logvars, epsilons):
+        return epsilons * tf.exp(logvars) + means
+
+
     def build_core(self):
         # load model from config
         self._config.hparams.batch_size = self.batch_size
@@ -54,27 +59,29 @@ class MusicVae:
         self.model.build(self._config.hparams, self._config.data_converter.output_depth, is_training=True)
 
 
-    def build_encoder(self, audios, lengths):
-        dist = self.model.encode(audios, lengths)
-        latents = dist.sample()
+    def build_encoder(self, audios, lengths, epsilons):
+        dist, mus, sigmas = self.model.encode(audios, lengths)
+        # latents = dist.sample()
+        latents = self.reparameterize(mus, sigmas, epsilons)
         return latents
 
 
     def build_decoder(self, latents):
         # audios, results = self.model.sample(self.batch_size, z=latents, max_length=self.max_length, temperature=self.temperature, c_input=self._c_input)
-        results = self.model.decoder.decode(z=latents, max_length=self.max_length)
-        audios = results.rnn_output
+        results = self.model.decoder.decode(z=latents)
+        aud_dists = results.rnn_output
+        audios = results.rnn_output # self.model.decoder._sample(aud_dists, self.temperature)
         lengths = results.final_sequence_lengths
         # if hierarchical, add up lengths of all n bars
         if len(lengths.shape) > 1:
             lengths = tf.reduce_sum(lengths, axis=1) # add up lengths of all n bars
-        return audios, lengths
+        return audios, aud_dists, lengths
 
 
     def build(self):
         self.build_core()
-        self.latents = self.build_encoder(self._inputs, self._inputs_length)
-        self.audios, self.lengths = self.build_decoder(self._z_input)
+        self.latents = self.build_encoder(self._inputs, self._inputs_length, self.epsilons)
+        self.audios, self.aud_dists, self.lengths = self.build_decoder(self._z_input)
         # debug info
         logging.info(self)
 
@@ -91,6 +98,8 @@ class MusicVae:
 
 
     def sample(self, tf_session, num_samples, temperature):
+        np.random.seed(42)
+        tf.random.set_random_seed(42)
         feed_dict = {
             self._z_input: (np.random.randn(self.batch_size, self.latent_dim).astype(np.float32)),
             self.temperature: temperature
