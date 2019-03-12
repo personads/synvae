@@ -179,9 +179,9 @@ class CifarVae(VisualVae):
         flat = tf.keras.layers.Flatten()(conv3)
         dense = tf.keras.layers.Dense(units=(self.img_height//8 * self.img_width//8 * 256), activation=tf.nn.relu)(flat)
         means = tf.keras.layers.Dense(self.latent_dim)(dense)
-        logvars = tf.keras.layers.Dense(self.latent_dim)(dense)
-        latents = self.reparameterize(means, logvars, epsilons)
-        return latents, means, logvars
+        sigmas = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.softplus)(dense)
+        latents = self.reparameterize(means, sigmas, epsilons)
+        return latents, means, sigmas
 
 
     def build_decoder(self, latents):
@@ -206,9 +206,9 @@ class MnistVae(VisualVae):
         conv2 = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(conv1)
         flat = tf.keras.layers.Flatten()(conv2)
         means = tf.keras.layers.Dense(self.latent_dim)(flat)
-        logvars = tf.keras.layers.Dense(self.latent_dim)(flat)
-        latents = self.reparameterize(means, logvars, epsilons)
-        return latents, means, logvars
+        sigmas = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.softplus)(flat)
+        latents = self.reparameterize(means, sigmas, epsilons)
+        return latents, means, sigmas
 
 
     def build_decoder(self, latents):
