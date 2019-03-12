@@ -306,6 +306,8 @@ class BaseLstmDecoder(base_model.BaseDecoder):
     else:
       self._cudnn_dec_lstm = None
 
+    self.max_length =tf.constant(hparams.max_seq_len, tf.int32)
+
   @property
   def state_size(self):
     return self._dec_cell.state_size
@@ -398,22 +400,20 @@ class BaseLstmDecoder(base_model.BaseDecoder):
 
     return results
 
-  def decode(self, z, max_length):
+  def decode(self, z):
     """[Custom] Decoding function separated from training procedure"""
     batch_size = z.shape[0]
 
     # set inputs to 0 (since there aren't any)
-    plc_inputs = tf.zeros([batch_size, max_length, self._output_depth], dtype=tf.float32)
-    # # concatenate conditional z
-    # plc_inputs = tf.concat([plc_inputs, z], axis=-1)
+    plc_inputs = tf.zeros([batch_size, self.max_length, self._output_depth], dtype=tf.float32)
     # set lengths to max_length since all inputs should decode until the end
-    plc_lengths = tf.ones([batch_size], tf.int32) * max_length
+    plc_lengths = tf.ones([batch_size], tf.int32) * self.max_length
 
     # repeat z across the full output length [z_0, ..., z_n, z_0, ..., z_n]
-    repeated_z = tf.tile(tf.expand_dims(z, axis=1), [1, max_length, 1])
+    repeated_z = tf.tile(tf.expand_dims(z, axis=1), [1, self.max_length, 1])
 
     # auxilary inputs which are concatenated to RNN output at each step (containing z for each step)
-    auxiliary_inputs = tf.zeros([batch_size, max_length, 0])
+    auxiliary_inputs = tf.zeros([batch_size, self.max_length, 0])
     auxiliary_inputs = tf.concat([auxiliary_inputs, repeated_z], axis=2)
 
     # Use scheduled sampling with RNN outputs only
@@ -422,9 +422,10 @@ class BaseLstmDecoder(base_model.BaseDecoder):
         sequence_length=plc_lengths,
         auxiliary_inputs=auxiliary_inputs,
         sampling_probability=tf.constant(1.0), # set to 1 to sample from outputs only
-        next_inputs_fn=None) # set to None to sample from outputs only
+        next_inputs_fn=self._sample) # set to None to sample from outputs only
+        # next_inputs_fn=None) # set to None to sample from outputs only
 
-    results = self._decode(z, helper=helper, input_shape=helper.inputs.shape[2:], max_length=max_length)
+    results = self._decode(z, helper=helper, input_shape=helper.inputs.shape[2:], max_length=self.max_length)
 
     return results
 
@@ -1026,6 +1027,7 @@ class HierarchicalLstmDecoder(base_model.BaseDecoder):
 
     with tf.variable_scope('core_decoder', reuse=tf.AUTO_REUSE):
       self._core_decoder.build(hparams, output_depth, is_training)
+      self._core_decoder.max_length = self._level_lengths[-1]
 
   @property
   def state_size(self):
@@ -1126,6 +1128,27 @@ class HierarchicalLstmDecoder(base_model.BaseDecoder):
     perm = list(range(len(hier_shape)))
     perm.insert(num_levels, perm.pop(0))
     return tf.transpose(hier_t, perm)
+
+  def decode(self, z):
+    """[Custom] Hierarchical decoding function separated from training procedure"""
+    all_decode_results = []
+
+    def base_decode_fn(embedding, hier_index):
+      """Base function for sampling hierarchical decoder."""
+      decode_results = self._core_decoder.decode(z=embedding)
+      all_decode_results.append(decode_results)
+      if self._hierarchical_encoder:
+        return self._hierarchical_encoder.level(0).encode(
+            decode_results.rnn_output,
+            decode_results.final_sequence_lengths)
+      else:
+        return tf.concat(nest.flatten(decode_results.final_state), axis=-1)
+
+    # populate all_decode_results
+    self._hierarchical_decode(z, base_decode_fn)
+
+    results = self._merge_decode_results(all_decode_results)
+    return results
 
   def reconstruction_loss(self, x_input, x_target, x_length, z=None,
                           c_input=None):
