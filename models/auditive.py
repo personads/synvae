@@ -47,8 +47,8 @@ class MusicVae:
         return res
 
 
-    def reparameterize(self, means, logvars, epsilons):
-        return epsilons * tf.exp(logvars) + means
+    def reparameterize(self, mus, sigmas, epsilons):
+        return epsilons * sigmas + mus
 
 
     def build_core(self):

@@ -16,7 +16,7 @@ class SynestheticVae:
         self.epsilons = self.vis_model.epsilons
         self.temperature = self.aud_model.temperature
         self.audios, self.aud_dists, self.aud_lengths = None, None, None
-        self.vis_latents, self.vis_means, self.vis_logvars = None, None, None
+        self.vis_latents, self.vis_means, self.vis_vars = None, None, None
         self.reconstructions, self.aud_latents = None, None
         self.train_variables = None
         self.loss = None
@@ -38,11 +38,11 @@ class SynestheticVae:
     def build_encoder(self, images, epsilons):
         # visual encoding step
         with tf.variable_scope('visual_vae_encoder'):
-            vis_latents, vis_means, vis_logvars = self.vis_model.build_encoder(images, epsilons)
+            vis_latents, vis_means, vis_vars = self.vis_model.build_encoder(images, epsilons)
         # audio decoding step
         with tf.variable_scope('music_vae_decoder'):
             audios, aud_dists, lengths = self.aud_model.build_decoder(vis_latents)
-        return audios, aud_dists, lengths, vis_latents, vis_means, vis_logvars
+        return audios, aud_dists, lengths, vis_latents, vis_means, vis_vars
 
 
     def build_decoder(self, aud_dists, lengths, epsilons):
@@ -60,14 +60,14 @@ class SynestheticVae:
         with tf.variable_scope('music_vae_core'):
             self.aud_model.build_core()
         # set up synesthetic encoder and decoder
-        self.audios, self.aud_dists, self.aud_lengths, self.vis_latents, self.vis_means, self.vis_logvars = self.build_encoder(self.images, self.epsilons)
+        self.audios, self.aud_dists, self.aud_lengths, self.vis_latents, self.vis_means, self.vis_vars = self.build_encoder(self.images, self.epsilons)
         self.reconstructions, self.aud_latents = self.build_decoder(self.aud_dists, self.aud_lengths, self.epsilons)
         # only get variables relevant to visual vae
         self.train_variables = tf.trainable_variables(scope='visual_vae')
         # self.fixed_variables = tf.trainable_variables(scope='music_vae')
         self.fixed_variables = [var for var in tf.trainable_variables() if var not in self.train_variables]
         # set up loss calculation
-        self.loss = self.vis_model.calc_loss(self.images, self.reconstructions, self.vis_means, self.vis_logvars)
+        self.loss = self.vis_model.calc_loss(self.images, self.reconstructions, self.vis_means, self.vis_vars)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
