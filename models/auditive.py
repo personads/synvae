@@ -19,19 +19,16 @@ class MusicVae:
         self.latent_dim = self._config.hparams.z_size
         # set up placeholders
         self.temperature = tf.placeholder(tf.float32, shape=(), name='temperature')
-        if self._config.hparams.z_size:
-            self._z_input = tf.placeholder(tf.float32, shape=[self.batch_size, self._config.hparams.z_size], name='aud_latents')
-        else:
-            self._z_input = None
+        self._z_input = tf.placeholder(tf.float32, shape=[self.batch_size, self._config.hparams.z_size], name='aud_latents')
         if self._config.data_converter.control_depth > 0:
             self._c_input = tf.placeholder(
             tf.float32, shape=[None, self._config.data_converter.control_depth])
         else:
             self._c_input = None
-        self._inputs = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.input_depth])
+        self.inputs = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.input_depth])
         self._controls = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.control_depth])
         self.max_length = tf.constant(self.music_length, tf.int32)
-        self._inputs_length = tf.placeholder(tf.int32, shape=[self.batch_size] + list(self._config.data_converter.length_shape))
+        self.inputs_length = tf.placeholder(tf.int32, shape=[self.batch_size] + list(self._config.data_converter.length_shape))
         self.epsilons = tf.placeholder(tf.float32, [self.batch_size, self.latent_dim], name='aud_epsilons')
         # set up encoding and decoding operation placeholders
         self.latents = None
@@ -69,19 +66,19 @@ class MusicVae:
     def build_decoder(self, latents):
         # audios, results = self.model.sample(self.batch_size, z=latents, max_length=self.max_length, temperature=self.temperature, c_input=self._c_input)
         results = self.model.decoder.decode(z=latents)
-        aud_dists = results.rnn_output
+        # aud_dists = results.rnn_output
         audios = results.rnn_output # self.model.decoder._sample(aud_dists, self.temperature)
         lengths = results.final_sequence_lengths
         # if hierarchical, add up lengths of all n bars
         if len(lengths.shape) > 1:
             lengths = tf.reduce_sum(lengths, axis=1) # add up lengths of all n bars
-        return audios, aud_dists, lengths
+        return audios, lengths
 
 
     def build(self):
         self.build_core()
-        self.latents = self.build_encoder(self._inputs, self._inputs_length, self.epsilons)
-        self.audios, self.aud_dists, self.lengths = self.build_decoder(self._z_input)
+        self.latents = self.build_encoder(self.inputs, self.inputs_length, self.epsilons)
+        self.audios, self.lengths = self.build_decoder(self._z_input)
         # debug info
         logging.info(self)
 
