@@ -17,6 +17,7 @@ from experiments import *
 if __name__ == '__main__':
     arg_parser = parse_arguments('SynVAE (CIFAR10)')
     arg_parser.add_argument('cifar_path', help='path to CIFAR10')
+    arg_parser.add_argument('cifarvae_path', help='path to checkoint for CIFAR10 VisualVAE')
     arg_parser.add_argument('musicvae_config', help='name of the MusicVAE model configuration (e.g. hierdec-mel_16bar)')
     arg_parser.add_argument('musicvae_path', help='path to MusicVAE model checkpoints')
     args = arg_parser.parse_args()
@@ -51,6 +52,8 @@ if __name__ == '__main__':
         sess.run(tf.global_variables_initializer())
         # restore MusicVAE
         model.restore_auditive(tf_session=sess, path=args.musicvae_path)
+        # restore CIFAR VisualVAE
+        model.restore_visual(tf_session=sess, path=args.cifarvae_path)
         # set up TensorBoard writer
         tf_writer = tf.summary.FileWriter(tb_path, graph=sess.graph)
         # training loop

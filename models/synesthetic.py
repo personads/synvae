@@ -116,6 +116,21 @@ class SynestheticVae:
         self.aud_model.restore(tf_session=tf_session, path=path, var_list=var_map)
 
 
+    def restore_visual(self, tf_session, path):
+        # remove music_vae scope prefix for loading pre-trained checkpoint
+        var_map = {}
+        for vis_var in self.train_variables:
+            # remove top level scope if present
+            var_key = vis_var.name
+            if vis_var.name.startswith('visual_vae'):
+                var_key = '/'.join(var_key.split('/')[1:])
+            # remove device id
+            var_key = var_key.split(':')[0]
+            # map to actual variable
+            var_map[var_key] = vis_var
+        self.vis_model.restore(tf_session=tf_session, path=path, var_list=var_map)
+
+
     # DEBUG function
     def export_weights(self, tf_session, path):
         with open(path, 'w', encoding='utf8') as fop:

@@ -84,7 +84,6 @@ class MusicVae:
 
 
     def restore(self, tf_session, path, var_list=None):
-        # tf.train.Saver(var_list=self.variables).restore(tf_session, path)
         tf.train.Saver(var_list=var_list).restore(tf_session, path)
         logging.info("[MusicVae] Restored model from '%s'." % path)
 

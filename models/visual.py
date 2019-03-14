@@ -86,8 +86,8 @@ class VisualVae:
         logging.info("[VisualVae] Saved model to '%s'." % save_path)
 
 
-    def restore(self, tf_session, path):
-        tf.train.Saver().restore(tf_session, path)
+    def restore(self, tf_session, path, var_list=None):
+        tf.train.Saver(var_list=var_list).restore(tf_session, path)
         logging.info("[VisualVae] Restored model from '%s'." % path)
 
 
