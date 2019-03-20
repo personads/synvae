@@ -130,7 +130,7 @@ if __name__ == '__main__':
         num_labels = len(label_descs)
         logging.info("Loaded %d test images from MNIST." % (images.shape[0],))
     elif args.task == 'cifar':
-        if args.data_path is None:
+        if len(args.data_path) < 1:
             arg_parser.error("CIFAR task requires 'data_path' argument.")
         cifar = Cifar(args.data_path)
         images = cifar.data
@@ -190,6 +190,11 @@ if __name__ == '__main__':
     logging.info("\rEncoded %d batches with avg_loss %.2f, %d audios, %d reconstructions, %d visual latent vectors and %d auditive latent vectors."
         % (batch_idx, avg_loss, audios.shape[0], reconstructions.shape[0], vis_latents.shape[0], aud_latents.shape[0]))
 
+    logging.info("Saving latent representations...")
+    np.save(os.path.join(args.out_path, 'vis_latents.npy'), vis_latents)
+    np.save(os.path.join(args.out_path, 'aud_latents.npy'), aud_latents)
+    logging.info("Saved %d visual latents and %d auditive latents." % (vis_latents.shape[0], aud_latents.shape[0]))
+
     logging.info("Saving outputs...")
     for idx in range(images.shape[0]):
         model.vis_model.save_image(images[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_orig.png'))
@@ -202,17 +207,15 @@ if __name__ == '__main__':
     logging.info("Calculating similarities...")
     vis_sims = calc_sims(vis_latents)
     aud_sims = calc_sims(aud_latents)
-    np.save(os.path.join(args.out_path, 'vis_sims.npy'), vis_sims)
-    np.save(os.path.join(args.out_path, 'aud_sims.npy'), aud_sims)
-    logging.info("Saved audio and visual similarities to %s." % os.path.join(args.out_path, '*_sims.npy'))
+    # np.save(os.path.join(args.out_path, 'vis_sims.npy'), vis_sims)
+    # np.save(os.path.join(args.out_path, 'aud_sims.npy'), aud_sims)
+    # logging.info("Saved audio and visual similarities to %s." % os.path.join(args.out_path, '*_sims.npy'))
 
     logging.info("Calculating metrics for visual latents...")
     vis_mean_latents, vis_sim_idcs, rel_sim_by_label, oth_sim_by_label, precision_by_label = calc_metrics(vis_latents, labels, vis_sims, num_labels, args.top)
     log_metrics(label_descs, args.top, rel_sim_by_label, oth_sim_by_label, precision_by_label)
-    np.save(os.path.join(args.out_path, 'vis_sim_idcs.npy'), vis_sim_idcs)
     np.save(os.path.join(args.out_path, 'vis_mean_latents.npy'), vis_mean_latents)
     logging.info("Calculating metrics for auditive latents...")
     aud_mean_latents, aud_sim_idcs, rel_sim_by_label, oth_sim_by_label, precision_by_label = calc_metrics(aud_latents, labels, aud_sims, num_labels, args.top)
     log_metrics(label_descs, args.top, rel_sim_by_label, oth_sim_by_label, precision_by_label)
-    np.save(os.path.join(args.out_path, 'aud_sim_idcs.npy'), aud_sim_idcs)
     np.save(os.path.join(args.out_path, 'aud_mean_latents.npy'), aud_mean_latents)
