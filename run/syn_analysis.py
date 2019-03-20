@@ -6,6 +6,7 @@ import logging
 import numpy as np
 import tensorflow as tf
 
+from data.cifar import Cifar
 from models.visual import MnistVae, CifarVae
 from models.auditive import MusicVae
 from models.synesthetic import SynestheticVae
@@ -19,11 +20,11 @@ def calc_sims(latents):
     sims = dot_mat / mlt_mat
     return sims
 
-def calc_metrics(data, labels, sims, num_labels, export_step, export_fn, export_ext):
-    rel_sim_by_label = np.zeros(len(num_labels))
-    oth_sim_by_label = np.zeros(len(num_labels))
-    precision_by_label = np.zeros(len(num_labels))
-    label_count = np.zeros(len(num_labels))
+def calc_metrics(data, labels, sims, num_labels, top_n):
+    rel_sim_by_label = np.zeros(num_labels)
+    oth_sim_by_label = np.zeros(num_labels)
+    precision_by_label = np.zeros(num_labels)
+    label_count = np.zeros(num_labels)
 
     for idx in range(data.shape[0]):
         lbl = labels[idx]
@@ -57,7 +58,7 @@ def calc_metrics(data, labels, sims, num_labels, export_step, export_fn, export_
 
     return rel_sim_by_label, oth_sim_by_label, precision_by_label
 
-def log_metrics(label_descs, rel_sim_by_label, oth_sim_by_label, precision_by_label):
+def log_metrics(label_descs, top_n, rel_sim_by_label, oth_sim_by_label, precision_by_label):
     logging.info("Overall metrics:")
     for label_idx, label in enumerate(label_descs):
         logging.info("  %s: %.2f P@%d, %.2f rel sim, %.2f oth sim" % (
@@ -79,6 +80,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('data_path', help='path to data (required for CIFAR)')
     arg_parser.add_argument('out_path', help='path to output')
     arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size')
+    arg_parser.add_argument('--top', type=int, default=10, help='top n results to consider during evaluation')
     args = arg_parser.parse_args()
 
     # check if directory already exists
@@ -161,7 +163,7 @@ if __name__ == '__main__':
 
                 # append to result
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
-                if (reconstructions is None) or (latents is None):
+                if batch_idx == 1:
                     audios, reconstructions, vis_latents, aud_latents = cur_audios, cur_recons, cur_vis_latents, cur_aud_latents
                 else:
                     audios = np.concatenate((audios, cur_audios), axis=0)
@@ -172,8 +174,8 @@ if __name__ == '__main__':
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch
                 break
-    logging.info("\rEncoded %d batches with avg_loss %.2f, %d audios, %d reconstructions and %d latent vectors."
-        % (batch_idx, avg_loss, audios.shape[0], reconstructions.shape[0], latents.shape[0]))
+    logging.info("\rEncoded %d batches with avg_loss %.2f, %d audios, %d reconstructions, %d visual latent vectors and %d auditive latent vectors."
+        % (batch_idx, avg_loss, audios.shape[0], reconstructions.shape[0], vis_latents.shape[0], aud_latents.shape[0]))
 
     logging.info("Saving outputs...")
     for idx in range(images.shape[0]):
@@ -187,13 +189,13 @@ if __name__ == '__main__':
     logging.info("Calculating similarities...")
     vis_sims = calc_sims(vis_latents)
     aud_sims = calc_sims(aud_latents)
-    np.save(os.path.join(args.out_path, str(idx) + 'vis_sims.npy'), vis_sims)
-    np.save(os.path.join(args.out_path, str(idx) + 'aud_sims.npy'), aud_sims)
+    np.save(os.path.join(args.out_path, 'vis_sims.npy'), vis_sims)
+    np.save(os.path.join(args.out_path, 'aud_sims.npy'), aud_sims)
     logging.info("Saved audio and visual similarities to %s." % os.path.join(args.out_path, str(idx) + '*_sims.npy'))
 
     logging.info("Calculating metrics for visual latents...")
-    rel_sim_by_label, oth_sim_by_label, precision_by_label = calc_metrics(images, labels, vis_sims, num_labels)
-    log_metrics(label_descs, rel_sim_by_label, oth_sim_by_label, precision_by_label)
+    rel_sim_by_label, oth_sim_by_label, precision_by_label = calc_metrics(images, labels, vis_sims, num_labels, args.top)
+    log_metrics(label_descs, args.top, rel_sim_by_label, oth_sim_by_label, precision_by_label)
     logging.info("Calculating metrics for auditive latents...")
-    rel_sim_by_label, oth_sim_by_label, precision_by_label = calc_metrics(images, labels, aud_sims, num_labels)
-    log_metrics(label_descs, rel_sim_by_label, oth_sim_by_label, precision_by_label)
+    rel_sim_by_label, oth_sim_by_label, precision_by_label = calc_metrics(images, labels, aud_sims, num_labels, args.top)
+    log_metrics(label_descs, args.top, rel_sim_by_label, oth_sim_by_label, precision_by_label)
