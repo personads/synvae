@@ -20,21 +20,27 @@ def calc_sims(latents):
     sims = dot_mat / mlt_mat
     return sims
 
-def calc_metrics(data, labels, sims, num_labels, top_n):
+def calc_metrics(latents, labels, sims, num_labels, top_n):
+    mean_latents = np.zeros([len(label_descs), latents.shape[1]])
+    sim_idcs = np.zeros([latents.shape[0], latents.shape[0]])
     rel_sim_by_label = np.zeros(num_labels)
     oth_sim_by_label = np.zeros(num_labels)
     precision_by_label = np.zeros(num_labels)
     label_count = np.zeros(num_labels)
 
-    for idx in range(data.shape[0]):
+    for idx in range(latents.shape[0]):
+        sys.stdout.write("\rCalculating metrics for %d/%d (%.2f%%)..." % (idx+1, latents.shape[0], ((idx+1)*100)/latents.shape[0]))
+        sys.stdout.flush()
+
         lbl = labels[idx]
         # sort neighbours by similarity
         cur_sims = list(enumerate(sims[idx]))
         cur_sims = sorted(cur_sims, key=lambda el: el[1], reverse=True)
         # get n most similar
-        sim_img_idcs = cur_sims[:top_n+1]
-        top_idcs, top_sims = zip(*sim_img_idcs)
+        top_idcs, top_sims = zip(*cur_sims)
         top_idcs, top_sims = np.array(top_idcs), np.array(top_sims)
+        sim_idcs[idx] = top_idcs
+        top_idcs, top_sims = top_idcs[:top_n+1], top_sims[:top_n+1]
 
         # calculate average distances
         rel_idcs = np.where(labels == (lbl * np.ones_like(labels)))
@@ -51,12 +57,18 @@ def calc_metrics(data, labels, sims, num_labels, top_n):
         precision = tp / (tp + fp)
         precision_by_label[lbl] += precision
 
+        # add to mean latent
+        mean_latents[lbl] += latents[idx]
+
     # average out metrics
+    mean_latents /= label_count
     rel_sim_by_label /= label_count
     oth_sim_by_label /= label_count
     precision_by_label /= label_count
 
-    return rel_sim_by_label, oth_sim_by_label, precision_by_label
+    logging.info("\rCalculated metrics for %d latents.%s" % (latents.shape[0], ' '*16))
+
+    return mean_latents, sim_idcs, rel_sim_by_label, oth_sim_by_label, precision_by_label
 
 def log_metrics(label_descs, top_n, rel_sim_by_label, oth_sim_by_label, precision_by_label):
     logging.info("Overall metrics:")
@@ -194,8 +206,10 @@ if __name__ == '__main__':
     logging.info("Saved audio and visual similarities to %s." % os.path.join(args.out_path, str(idx) + '*_sims.npy'))
 
     logging.info("Calculating metrics for visual latents...")
-    rel_sim_by_label, oth_sim_by_label, precision_by_label = calc_metrics(images, labels, vis_sims, num_labels, args.top)
+    mean_vis_latents, vis_sim_idcs, rel_sim_by_label, oth_sim_by_label, precision_by_label = calc_metrics(vis_latents, labels, vis_sims, num_labels, args.top)
     log_metrics(label_descs, args.top, rel_sim_by_label, oth_sim_by_label, precision_by_label)
+    np.save(os.path.join(args.out_path, 'vis_sim_idcs.npy'), vis_sim_idcs)
     logging.info("Calculating metrics for auditive latents...")
-    rel_sim_by_label, oth_sim_by_label, precision_by_label = calc_metrics(images, labels, aud_sims, num_labels, args.top)
+    mean_aud_latents, aud_sim_idcs, rel_sim_by_label, oth_sim_by_label, precision_by_label = calc_metrics(aud_latents, labels, aud_sims, num_labels, args.top)
     log_metrics(label_descs, args.top, rel_sim_by_label, oth_sim_by_label, precision_by_label)
+    np.save(os.path.join(args.out_path, 'aud_sim_idcs.npy'), aud_sim_idcs)
