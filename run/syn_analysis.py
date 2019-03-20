@@ -192,9 +192,9 @@ if __name__ == '__main__':
 
     logging.info("Saving outputs...")
     for idx in range(images.shape[0]):
-        model.vis_model.save_image(images[idx], os.path.join(args.out_path, str(idx) + '_orig.png'))
-        model.vis_model.save_image(reconstructions[idx], os.path.join(args.out_path, str(idx) + '_recon.png'))
-        model.aud_model.save_midi(audios[idx], os.path.join(args.out_path, str(idx) + '_audio.midi'))
+        model.vis_model.save_image(images[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_orig.png'))
+        model.vis_model.save_image(reconstructions[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_recon.png'))
+        model.aud_model.save_midi(audios[idx], os.path.join(args.out_path, str(idx) + '_audio.mid'))
         sys.stdout.write("\rSaved %d/%d (%.2f%%)..." % (idx+1, images.shape[0], ((idx+1)*100)/images.shape[0]))
         sys.stdout.flush()
     logging.info("\rSaved %d images, audios and reconstructions." % images.shape[0])
