@@ -130,8 +130,8 @@ if __name__ == '__main__':
                 oth_sim_by_label[label_idx]
                 ))
         logging.info("Total (avg): %.2f P@%d, %.2f rel sim, %.2f oth sim" % (
-                np.mean(precision_by_label[label_idx]), top_n,
-                np.mean(rel_sim_by_label[label_idx]),
-                np.mean(oth_sim_by_label[label_idx])
+                np.mean(precision_by_label), top_n,
+                np.mean(rel_sim_by_label),
+                np.mean(oth_sim_by_label)
             ))
 
