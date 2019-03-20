@@ -21,12 +21,12 @@ def calc_sims(latents):
     return sims
 
 def calc_metrics(latents, labels, sims, num_labels, top_n):
-    mean_latents = np.zeros([len(label_descs), latents.shape[1]])
+    mean_latents = np.zeros([num_labels, latents.shape[1]])
     sim_idcs = np.zeros([latents.shape[0], latents.shape[0]])
     rel_sim_by_label = np.zeros(num_labels)
     oth_sim_by_label = np.zeros(num_labels)
     precision_by_label = np.zeros(num_labels)
-    label_count = np.zeros(num_labels)
+    label_idcs = [[] for _ in range(num_labels)]
 
     for idx in range(latents.shape[0]):
         sys.stdout.write("\rCalculating metrics for %d/%d (%.2f%%)..." % (idx+1, latents.shape[0], ((idx+1)*100)/latents.shape[0]))
@@ -49,7 +49,7 @@ def calc_metrics(latents, labels, sims, num_labels, top_n):
         oth_avg_sim = np.mean(sims[idx][oth_idcs])
         rel_sim_by_label[lbl] += rel_avg_sim
         oth_sim_by_label[lbl] += oth_avg_sim
-        label_count[lbl] += 1
+        label_idcs[lbl].append(idx)
 
         # calculate precision/recall at top n
         tp = np.sum(labels[top_idcs] == lbl)
@@ -57,11 +57,12 @@ def calc_metrics(latents, labels, sims, num_labels, top_n):
         precision = tp / (tp + fp)
         precision_by_label[lbl] += precision
 
-        # add to mean latent
-        mean_latents[lbl] += latents[idx]
+    # compute mean latents
+    for lbl in range(num_labels):
+        mean_latents[lbl] = np.mean(latents[label_idcs[lbl]], axis=0)
 
     # average out metrics
-    mean_latents /= label_count
+    label_count = np.array([len(lbl_idcs) for lbl_idcs in label_idcs])
     rel_sim_by_label /= label_count
     oth_sim_by_label /= label_count
     precision_by_label /= label_count
@@ -203,7 +204,7 @@ if __name__ == '__main__':
     aud_sims = calc_sims(aud_latents)
     np.save(os.path.join(args.out_path, 'vis_sims.npy'), vis_sims)
     np.save(os.path.join(args.out_path, 'aud_sims.npy'), aud_sims)
-    logging.info("Saved audio and visual similarities to %s." % os.path.join(args.out_path, str(idx) + '*_sims.npy'))
+    logging.info("Saved audio and visual similarities to %s." % os.path.join(args.out_path, '*_sims.npy'))
 
     logging.info("Calculating metrics for visual latents...")
     mean_vis_latents, vis_sim_idcs, rel_sim_by_label, oth_sim_by_label, precision_by_label = calc_metrics(vis_latents, labels, vis_sims, num_labels, args.top)
