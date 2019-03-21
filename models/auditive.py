@@ -19,20 +19,6 @@ class MusicVae:
         self.latent_dim = self._config.hparams.z_size
         # set up placeholders
         self.temperature = tf.placeholder(tf.float32, shape=(), name='temperature')
-        self._z_input = tf.placeholder(tf.float32, shape=[self.batch_size, self._config.hparams.z_size], name='aud_latents')
-        if self._config.data_converter.control_depth > 0:
-            self._c_input = tf.placeholder(
-            tf.float32, shape=[None, self._config.data_converter.control_depth])
-        else:
-            self._c_input = None
-        self.inputs = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.input_depth])
-        self._controls = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.control_depth])
-        self.max_length = tf.constant(self.music_length, tf.int32)
-        self.inputs_length = tf.placeholder(tf.int32, shape=[self.batch_size] + list(self._config.data_converter.length_shape))
-        self.epsilons = tf.placeholder(tf.float32, [self.batch_size, self.latent_dim], name='aud_epsilons')
-        # set up encoding and decoding operation placeholders
-        self.latents = None
-        self.audios, self.aud_dists, self.lengths = None, None, None
 
 
     def __repr__(self):
@@ -44,23 +30,22 @@ class MusicVae:
         return res
 
 
-    def reparameterize(self, mus, sigmas, epsilons):
-        return epsilons * sigmas + mus
-
-
     def build_core(self):
         # load model from config
         self._config.hparams.batch_size = self.batch_size
         self._config.data_converter.max_tensors_per_item = None
         self.model = self._config.model
         self.model.build(self._config.hparams, self._config.data_converter.output_depth, is_training=True)
+        self.z_input = tf.placeholder(tf.float32, shape=[self.batch_size, self._config.hparams.z_size], name='aud_latents')
+        self.inputs = tf.placeholder(tf.float32, shape=[self.batch_size, None, self._config.data_converter.input_depth])
+        self.max_length = tf.constant(self.music_length, tf.int32)
+        self.inputs_length = tf.placeholder(tf.int32, shape=[self.batch_size] + list(self._config.data_converter.length_shape))
 
 
-    def build_encoder(self, audios, lengths, epsilons):
-        dist, mus, sigmas = self.model.encode(audios, lengths)
-        # latents = dist.sample()
-        latents = self.reparameterize(mus, sigmas, epsilons)
-        return latents
+    def build_encoder(self, audios, lengths):
+        latent_dist = self.model.encode(audios, lengths)
+        latents = latent_dist.sample()
+        return latents, latent_dist
 
 
     def build_decoder(self, latents):
@@ -77,8 +62,8 @@ class MusicVae:
 
     def build(self):
         self.build_core()
-        self.latents = self.build_encoder(self.inputs, self.inputs_length, self.epsilons)
-        self.audios, self.lengths = self.build_decoder(self._z_input)
+        self.latents, self.latent_dist = self.build_encoder(self.inputs, self.inputs_length)
+        self.audios, self.lengths = self.build_decoder(self.z_input)
         # debug info
         logging.info(self)
 
@@ -97,7 +82,7 @@ class MusicVae:
         np.random.seed(42)
         tf.random.set_random_seed(42)
         feed_dict = {
-            self._z_input: (np.random.randn(self.batch_size, self.latent_dim).astype(np.float32)),
+            self.z_input: (np.random.randn(self.batch_size, self.latent_dim).astype(np.float32)),
             self.temperature: temperature
         }
 

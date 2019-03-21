@@ -13,15 +13,7 @@ class SynestheticVae:
         self.epoch = 0
         # set up computation graph placeholders
         self.images = self.vis_model.images
-        self.epsilons = self.vis_model.epsilons
         self.temperature = self.aud_model.temperature
-        self.audios, self.aud_lengths = None, None
-        self.vis_latents, self.vis_means, self.vis_vars = None, None, None
-        self.reconstructions, self.aud_latents = None, None
-        self.train_variables = None
-        self.loss = None
-        self.optimizer = None
-        self.train_op = None
 
 
     def __repr__(self):
@@ -35,24 +27,24 @@ class SynestheticVae:
         return res
 
 
-    def build_encoder(self, images, epsilons):
+    def build_encoder(self, images):
         # visual encoding step
         with tf.variable_scope('visual_vae_encoder'):
-            vis_latents, vis_means, vis_vars = self.vis_model.build_encoder(images, epsilons)
+            vis_latents, vis_dist = self.vis_model.build_encoder(images)
         # audio decoding step
         with tf.variable_scope('music_vae_decoder'):
             audios, lengths = self.aud_model.build_decoder(vis_latents)
-        return audios, lengths, vis_latents, vis_means, vis_vars
+        return audios, lengths, vis_latents, vis_dist
 
 
-    def build_decoder(self, audios, lengths, epsilons):
+    def build_decoder(self, audios, lengths):
         # audio encoding step
         with tf.variable_scope('music_vae_encoder'):
-            aud_latents = self.aud_model.build_encoder(audios, lengths, epsilons)
+            aud_latents, aud_dist = self.aud_model.build_encoder(audios, lengths)
         # visual decoding step
         with tf.variable_scope('visual_vae_decoder'):
             vis_recons = self.vis_model.build_decoder(aud_latents)
-        return vis_recons, aud_latents
+        return vis_recons, aud_latents, aud_dist
 
 
     def build(self):
@@ -60,15 +52,14 @@ class SynestheticVae:
         with tf.variable_scope('music_vae_core'):
             self.aud_model.build_core()
         # set up synesthetic encoder and decoder
-        self.audios, self.aud_lengths, self.vis_latents, self.vis_means, self.vis_vars = self.build_encoder(self.images, self.epsilons)
-        self.reconstructions, self.aud_latents = self.build_decoder(self.audios, self.aud_lengths, self.epsilons)
+        self.audios, self.aud_lengths, self.vis_latents, self.vis_dist = self.build_encoder(self.images)
+        self.reconstructions, self.aud_latents, self.aud_dist = self.build_decoder(self.audios, self.aud_lengths)
         # only get variables relevant to visual vae
         self.train_variables = tf.trainable_variables(scope='visual_vae')
-        # self.fixed_variables = tf.trainable_variables(scope='music_vae')
         self.fixed_variables = [var for var in tf.trainable_variables() if var not in self.train_variables]
         # set up loss calculation
         with tf.name_scope('loss'):
-            self.loss = self.vis_model.calc_loss(self.images, self.reconstructions, self.vis_means, self.vis_vars)
+            self.loss = self.vis_model.calc_loss(self.images, self.reconstructions, self.vis_dist)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
@@ -102,17 +93,6 @@ class SynestheticVae:
             var_key = var_key.split(':')[0]
             # map to actual variable
             var_map[var_key] = mvae_var
-        # # DBG Print variables
-        # ckpt_vars = sorted([name for name, _ in tf.train.list_variables(path)])
-        # model_vars = sorted(list(var_map.keys()))
-        # global_vars = sorted([v.name for v in tf.global_variables()])
-        # print("---- checkpoint variables ----")
-        # print("\n".join(ckpt_vars))
-        # print("---- music variables ----")
-        # print("\n".join(model_vars))
-        # print("---- global variables ----")
-        # print("\n".join(global_vars))
-        # # END DBG
         self.aud_model.restore(tf_session=tf_session, path=path, var_list=var_map)
 
 
@@ -129,39 +109,6 @@ class SynestheticVae:
             # map to actual variable
             var_map[var_key] = vis_var
         self.vis_model.restore(tf_session=tf_session, path=path, var_list=var_map)
-
-
-    # DEBUG function
-    def export_weights(self, tf_session, path):
-        with open(path, 'w', encoding='utf8') as fop:
-            # export and save weights
-            # check fixed weights
-            fop.write('-'*16 + 'FIXED' + '-'*16 + '\n')
-            var_vals = tf_session.run(self.fixed_variables)
-            for var, val in zip(self.fixed_variables, var_vals):
-                self.weight_vals[var.name] = self.weight_vals.get(var.name, []) + [val]
-                # check integrity
-                update_state = 'init'
-                if len(self.weight_vals[var.name]) > 1:
-                    update_state = 'changed'
-                    if np.array_equal(self.weight_vals[var.name][-1], self.weight_vals[var.name][-2]):
-                        update_state = 'unchanged'
-                # write to file
-                fop.write('(' + update_state + ') ' + var.name + ': ' + str(val) + '\n')
-            # check trainable variables
-            fop.write('-'*16 + 'TRAINABLE' + '-'*16 + '\n')
-            var_vals = tf_session.run(self.train_variables)
-            for var, val in zip(self.train_variables, var_vals):
-                self.weight_vals[var.name] = self.weight_vals.get(var.name, []) + [val]
-                # check integrity
-                update_state = 'init'
-                if len(self.weight_vals[var.name]) > 1:
-                    update_state = 'changed'
-                    if np.array_equal(self.weight_vals[var.name][-1], self.weight_vals[var.name][-2]):
-                        update_state = 'unchanged'
-                # write to file
-                fop.write('(' + update_state + ') ' + var.name + ': ' + str(val) + '\n')
-    # END DEBUG function
 
 
     def train(self, tf_session, train_iter, valid_iter, max_epochs, model_path, out_path, tf_writer):
@@ -181,9 +128,8 @@ class SynestheticVae:
                 try:
                     batch = tf_session.run(next_op)
                     batch_idx += 1
-                    epsilons = np.random.normal(loc=0., scale=1., size=(batch.shape[0], self.latent_dim))
                     temperature = 0.5
-                    _, cur_loss, summaries, vis_latents, aud_latents = tf_session.run([self.train_op, self.loss, merge_op, self.vis_latents, self.aud_latents], feed_dict={self.images: batch, self.epsilons: epsilons, self.temperature: temperature})
+                    _, cur_loss, summaries, vis_latents, aud_latents = tf_session.run([self.train_op, self.loss, merge_op, self.vis_latents, self.aud_latents], feed_dict={self.images: batch, self.temperature: temperature})
                     # DBG latent difference
                     latent_diffs = np.absolute(vis_latents - aud_latents)
                     avg_latent_diff = np.mean(np.mean(latent_diffs, axis=1))
@@ -223,16 +169,15 @@ class SynestheticVae:
                 sys.stdout.flush()
                 batch = tf_session.run(next_op)
                 batch_idx += 1
-                epsilons = np.zeros((batch.shape[0], self.latent_dim))
                 temperature = 0.5
-                cur_loss, audios, reconstructions = tf_session.run([self.loss, self.audios, self.reconstructions], feed_dict={self.images: batch, self.epsilons: epsilons, self.temperature: temperature})
+                cur_loss, audios, reconstructions = tf_session.run([self.loss, self.audios, self.reconstructions], feed_dict={self.images: batch, self.temperature: temperature})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                 # save original image and reconstruction
                 if (export_step > 0) and ((batch_idx-1) % export_step == 0):
                     if self.epoch == 1:
                         self.vis_model.save_image(batch[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_orig.png'))
                     self.vis_model.save_image(reconstructions[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_recon.png'))
-                    self.aud_model.save_midi(audios[0], os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '.mid'))
+                    self.aud_model.save_midi(audios[0], os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_audio.mid'))
             # end of dataset
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch

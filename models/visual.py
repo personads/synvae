@@ -17,13 +17,6 @@ class VisualVae:
         self.epoch = 0
         # set up computation graph
         self.images = tf.placeholder(tf.float32, [self.batch_size, self.img_height, self.img_width, self.img_depth], name='images')
-        self.epsilons = tf.placeholder(tf.float32, [self.batch_size, self.latent_dim], name='vis_epsilons')
-        # set up remaining operation placeholders
-        self.latents, self.means, self.logvars = None, None, None
-        self.reconstructions = None
-        self.loss = None
-        self.optimizer = None
-        self.train_op = None
 
 
     def __repr__(self):
@@ -35,13 +28,9 @@ class VisualVae:
         return res
 
 
-    def reparameterize(self, mus, sigmas, epsilons):
-        return epsilons * sigmas + mus
-
-
-    def build_encoder(self, images, epsilons):
-        latents, means, logvars = None, None, None
-        return latents, means, logvars
+    def build_encoder(self, images):
+        latents, latent_dist = None, None
+        return latents, latent_dist
 
 
     def build_decoder(self, latents):
@@ -50,10 +39,10 @@ class VisualVae:
 
 
     def build(self):
-        self.latents, self.means, self.logvars = self.build_encoder(self.images, self.epsilons)
+        self.latents, self.latent_dist = self.build_encoder(self.images)
         self.reconstructions = self.build_decoder(self.latents)
         # set up loss
-        self.loss = self.calc_loss(self.images, self.reconstructions, self.means, self.logvars)
+        self.loss = self.calc_loss(self.images, self.reconstructions, self.latent_dist)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
@@ -65,16 +54,13 @@ class VisualVae:
         logging.info(self)
 
 
-    def calc_loss(self, originals, reconstructions, mus, sigmas):
+    def calc_loss(self, originals, reconstructions, latent_dist):
         originals_flat = tf.reshape(originals, (-1, self.img_height * self.img_width * self.img_depth))
         reconstructions_flat = tf.reshape(reconstructions, (-1, self.img_height * self.img_width * self.img_depth))
 
         recon_loss = tf.reduce_sum(tf.square(originals_flat - reconstructions_flat), axis=1) # MSE
 
-        # recon_loss = tf.reduce_sum(tf.keras.backend.abs(originals_flat - reconstructions_flat), axis=1) #L1
-        # latent_loss = - 0.5 * tf.reduce_sum(1 + logvars - tf.square(means) - tf.exp(logvars), axis=1)
         prior_dist = tfp.distributions.MultivariateNormalDiag(loc=[0.] * self.latent_dim, scale_diag=[1.] * self.latent_dim)
-        latent_dist = tfp.distributions.MultivariateNormalDiag(loc=mus, scale_diag=sigmas)
         latent_loss = tfp.distributions.kl_divergence(latent_dist, prior_dist)
 
         loss = tf.reduce_mean(recon_loss + latent_loss)
@@ -112,8 +98,7 @@ class VisualVae:
                 try:
                     batch = tf_session.run(next_op)
                     batch_idx += 1
-                    epsilons = np.random.normal(loc=0., scale=1., size=(batch.shape[0], self.latent_dim))
-                    _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, merge_op], feed_dict={self.images: batch, self.epsilons: epsilons})
+                    _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, merge_op], feed_dict={self.images: batch})
                     avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                     sys.stdout.write("\rEpoch %d/%d. Batch %d. avg_loss %.2f. cur_loss %.2f.   " % (self.epoch, max_epochs, batch_idx, avg_loss, cur_loss))
                     sys.stdout.flush()
@@ -149,8 +134,7 @@ class VisualVae:
                 sys.stdout.flush()
                 batch = tf_session.run(next_op)
                 batch_idx += 1
-                epsilons = np.zeros((batch.shape[0], self.latent_dim))
-                cur_loss, reconstructions = tf_session.run([self.loss, self.reconstructions], feed_dict={self.images: batch, self.epsilons: epsilons})
+                cur_loss, reconstructions = tf_session.run([self.loss, self.reconstructions], feed_dict={self.images: batch})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                 # save original image and reconstruction
                 if (export_step > 0) and ((batch_idx-1) % export_step == 0):
@@ -171,7 +155,7 @@ class CifarVae(VisualVae):
         super().__init__(img_height=32, img_width=32, img_depth=3, latent_dim=latent_dim, batch_size=batch_size, learning_rate=1e-4)
 
 
-    def build_encoder(self, images, epsilons):
+    def build_encoder(self, images):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth))(images)
         conv1 = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(inputs)
         conv2 = tf.keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv1)
@@ -180,8 +164,9 @@ class CifarVae(VisualVae):
         dense = tf.keras.layers.Dense(units=(self.img_height//8 * self.img_width//8 * 256), activation=tf.nn.relu)(flat)
         means = tf.keras.layers.Dense(self.latent_dim)(dense)
         sigmas = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.softplus)(dense)
-        latents = self.reparameterize(means, sigmas, epsilons)
-        return latents, means, sigmas
+        latent_dist = tfp.distributions.MultivariateNormalDiag(loc=means, scale_diag=sigmas)
+        latents = latent_dist.sample()
+        return latents, latent_dist
 
 
     def build_decoder(self, latents):
@@ -200,15 +185,16 @@ class MnistVae(VisualVae):
         super().__init__(img_height=28, img_width=28, img_depth=1, latent_dim=latent_dim, batch_size=batch_size, learning_rate=1e-4)
 
 
-    def build_encoder(self, images, epsilons):
+    def build_encoder(self, images):
         inputs = tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth))(images)
         conv1 = tf.keras.layers.Conv2D(filters=32, kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(inputs)
         conv2 = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(conv1)
         flat = tf.keras.layers.Flatten()(conv2)
         means = tf.keras.layers.Dense(self.latent_dim)(flat)
         sigmas = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.softplus)(flat)
-        latents = self.reparameterize(means, sigmas, epsilons)
-        return latents, means, sigmas
+        latent_dist = tfp.distributions.MultivariateNormalDiag(loc=means, scale_diag=sigmas)
+        latents = latent_dist.sample()
+        return latents, latent_dist
 
 
     def build_decoder(self, latents):
