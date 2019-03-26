@@ -27,6 +27,20 @@ class SynestheticVae:
         return res
 
 
+    def calc_loss(self, originals, reconstructions, vis_dist, aud_dist):
+        originals_flat = tf.reshape(originals, (-1, self.img_height * self.img_width * self.img_depth))
+        reconstructions_flat = tf.reshape(reconstructions, (-1, self.img_height * self.img_width * self.img_depth))
+
+        recon_loss = tf.reduce_sum(tf.square(originals_flat - reconstructions_flat), axis=1) # MSE
+
+        prior_dist = tfp.distributions.MultivariateNormalDiag(loc=[0.] * self.latent_dim, scale_diag=[1.] * self.latent_dim)
+        vis_latent_loss = tfp.distributions.kl_divergence(vis_dist, prior_dist)
+        aud_latent_loss = tfp.distributions.kl_divergence(aud_dist, prior_dist)
+
+        loss = tf.reduce_mean(recon_loss + vis_latent_loss + aud_latent_loss)
+        return loss
+
+
     def build_encoder(self, images):
         # visual encoding step
         with tf.variable_scope('visual_vae_encoder'):
@@ -59,11 +73,11 @@ class SynestheticVae:
         self.fixed_variables = [var for var in tf.trainable_variables() if var not in self.train_variables]
         # set up loss calculation
         with tf.name_scope('loss'):
-            self.loss = self.vis_model.calc_loss(self.images, self.reconstructions, self.vis_dist)
+            self.loss = self.vis_model.calc_loss(self.images, self.reconstructions, self.vis_dist, self.aud_dist)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
-        self.train_op = self.optimizer.minimize(self.loss, var_list=self.train_variables)
+        self.train_op = self.optimizer.minimize(self.loss)
         # debug info
         tf.summary.image('Originals', self.images, max_outputs=4)
         tf.summary.image('Reconstructions', self.reconstructions, max_outputs=4)
