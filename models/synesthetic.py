@@ -2,6 +2,7 @@ import logging, os, sys
 
 import numpy as np
 import tensorflow as tf
+import tensorflow_probability as tfp
 
 class SynestheticVae:
     def __init__(self, visual_model, auditive_model, learning_rate):
@@ -28,8 +29,8 @@ class SynestheticVae:
 
 
     def calc_loss(self, originals, reconstructions, vis_dist, aud_dist):
-        originals_flat = tf.reshape(originals, (-1, self.img_height * self.img_width * self.img_depth))
-        reconstructions_flat = tf.reshape(reconstructions, (-1, self.img_height * self.img_width * self.img_depth))
+        originals_flat = tf.reshape(originals, (-1, self.vis_model.img_height * self.vis_model.img_width * self.vis_model.img_depth))
+        reconstructions_flat = tf.reshape(reconstructions, (-1, self.vis_model.img_height * self.vis_model.img_width * self.vis_model.img_depth))
 
         recon_loss = tf.reduce_sum(tf.square(originals_flat - reconstructions_flat), axis=1) # MSE
 
@@ -73,7 +74,7 @@ class SynestheticVae:
         self.fixed_variables = [var for var in tf.trainable_variables() if var not in self.train_variables]
         # set up loss calculation
         with tf.name_scope('loss'):
-            self.loss = self.vis_model.calc_loss(self.images, self.reconstructions, self.vis_dist, self.aud_dist)
+            self.loss = self.calc_loss(self.images, self.reconstructions, self.vis_dist, self.aud_dist)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
