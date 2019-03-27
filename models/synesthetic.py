@@ -38,7 +38,13 @@ class SynestheticVae:
         vis_latent_loss = tfp.distributions.kl_divergence(vis_dist, prior_dist)
         aud_latent_loss = tfp.distributions.kl_divergence(aud_dist, prior_dist)
 
-        loss = tf.reduce_mean(recon_loss + vis_latent_loss + aud_latent_loss)
+        print("shapes before mean:", recon_loss.shape, vis_latent_loss.shape, aud_latent_loss.shape)
+        recon_loss = tf.reduce_mean(recon_loss)
+        vis_latent_loss = tf.reduce_mean(vis_latent_loss)
+        aud_latent_loss = tf.reduce_mean(aud_latent_loss)
+        print("shapes after mean:", recon_loss.shape, vis_latent_loss.shape, aud_latent_loss.shape)
+
+        loss = recon_loss + vis_latent_loss + aud_latent_loss
         return loss
 
 
