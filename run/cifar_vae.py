@@ -9,7 +9,7 @@ import tensorflow as tf
 from data.cifar import Cifar
 from models.visual import CifarVae
 
-from experiments import *
+from utils.experiments import *
 
 
 if __name__ == '__main__':

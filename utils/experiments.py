@@ -1,4 +1,7 @@
 import argparse, logging, os, sys
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+
+from data.cifar import Cifar
 
 def parse_arguments(exp_name):
     arg_parser = argparse.ArgumentParser(description=exp_name)
@@ -34,3 +37,35 @@ def setup_logging(log_path):
 
     logger = logging.getLogger()
     logger.addHandler(logging.StreamHandler(sys.stdout))
+
+
+def load_data(data_name, split, data_path=None):
+    images, labels = None, None
+    label_descs, num_labels = None, None
+
+    # load data (initializes images and labels)
+    if data_name == 'mnist':
+        # load MNIST
+        (train_images, train_labels), (test_images, test_labels) = tf.keras.datasets.mnist.load_data()
+        if split == 'train':
+            images, labels = train_images, train_labels
+        elif split == 'test':
+            images, labels = test_images, test_labels
+        images = images.reshape(images.shape[0], 28, 28, 1).astype('float32')
+        # Normalizing the images to the range of [0., 1.]
+        images /= 255.
+        # Binarization
+        images[images >= .5] = 1.
+        images[images < .5] = 0.
+        label_descs = [str(i) for i in range(10)]
+        num_labels = len(label_descs)
+    elif args.task == 'cifar':
+        cifar = Cifar(data_path)
+        images = cifar.data
+        labels = cifar.labels
+        label_descs = cifar.label_descs
+        num_labels = len(label_descs)
+
+    logging.info("Loaded %d %s images from %s." % (images.shape[0], split, data_name.upper()))
+
+    return images, labels, label_descs, num_labels

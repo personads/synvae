@@ -10,7 +10,7 @@ from models.visual import MnistVae
 from models.auditive import MusicVae
 from models.synesthetic import SynestheticVae
 
-from experiments import *
+from utils.experiments import *
 
 
 if __name__ == '__main__':

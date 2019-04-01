@@ -8,7 +8,7 @@ import tensorflow as tf
 
 from models.visual import MnistVae
 
-from experiments import *
+from utils.experiments import *
 
 
 if __name__ == '__main__':
@@ -19,27 +19,29 @@ if __name__ == '__main__':
     mnist_vae = MnistVae(latent_dim=50, batch_size=args.batch_size)
     mnist_vae.build()
     # load MNIST
-    (train_images, _), (test_images, _) = tf.keras.datasets.mnist.load_data()
+    (train_images, _), (_, _) = tf.keras.datasets.mnist.load_data()
+    train_images = train_images[:50000]
+    valid_images = valid_images[50000:]
     train_images = train_images.reshape(train_images.shape[0], 28, 28, 1).astype('float32')
-    test_images = test_images.reshape(test_images.shape[0], 28, 28, 1).astype('float32')
-    logging.info("Loaded %d training, %d test images from MNIST." % (train_images.shape[0], test_images.shape[0]))
+    valid_images = valid_images.reshape(valid_images.shape[0], 28, 28, 1).astype('float32')
+    logging.info("Loaded %d training, %d validation images from MNIST." % (train_images.shape[0], valid_images.shape[0]))
     # Normalizing the images to the range of [0., 1.]
     train_images /= 255.
-    test_images /= 255.
+    valid_images /= 255.
     # Binarization
     train_images[train_images >= .5] = 1.
     train_images[train_images < .5] = 0.
-    test_images[test_images >= .5] = 1.
-    test_images[test_images < .5] = 0.
+    valid_images[valid_images >= .5] = 1.
+    valid_images[valid_images < .5] = 0.
     # set up TF datasets
     num_batches = train_images.shape[0] // args.batch_size
-    num_batches_test = test_images.shape[0] // args.batch_size
+    num_batches_test = valid_images.shape[0] // args.batch_size
     train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(train_images.shape[0]).batch(args.batch_size)
     train_iterator = train_dataset.make_initializable_iterator()
     train_next = train_iterator.get_next()
-    test_dataset = tf.data.Dataset.from_tensor_slices(test_images).batch(args.batch_size)
-    test_iterator = test_dataset.make_initializable_iterator()
-    test_next = test_iterator.get_next()
+    valid_dataset = tf.data.Dataset.from_tensor_slices(valid_images).batch(args.batch_size)
+    valid_iterator = valid_dataset.make_initializable_iterator()
+    valid_next = valid_iterator.get_next()
 
     epochs = args.epochs
     with tf.Session() as sess:
@@ -49,4 +51,4 @@ if __name__ == '__main__':
         tf_writer = tf.summary.FileWriter(tb_path, graph=sess.graph)
         # initialize variables
         sess.run(tf.global_variables_initializer())
-        mnist_vae.train(sess, train_iterator, test_iterator, epochs, model_path, out_path, tf_writer)
+        mnist_vae.train(sess, train_iterator, valid_iterator, epochs, model_path, out_path, tf_writer)
