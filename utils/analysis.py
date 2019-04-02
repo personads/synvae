@@ -1,12 +1,12 @@
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import logging
+import logging, random
 
 import numpy as np
 import tensorflow as tf
 
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 
 def calc_sims(latents):
     dot_mat = np.dot(latents, latents.T)
@@ -133,5 +133,13 @@ def gen_eval_task(mean_latents, latents, num_examples, num_tasks):
     # get tasks
     task_idcs = np.where(trio_sample_idcs >= 0.)
     task_trios = np.reshape(trio_sample_idcs[task_idcs], [3, num_tasks])
-    tasks = [list(task_trios[:, i]) for i in range(num_tasks)]
+    task_trios = [list(task_trios[:, i]) for i in range(num_tasks)]
+    # randomly select truths for tasks
+    tasks = []
+    for trio in task_trios:
+        truth_idx = random.randint(0, 3)
+        tasks.append(OrderedDict([
+            ('truth', truth_idx),
+            ('other', trio[:truth_idx] + trio[truth_idx + 1:])
+        ]))
     return examples, tasks
