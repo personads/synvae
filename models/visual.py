@@ -63,7 +63,7 @@ class VisualVae:
         prior_dist = tfp.distributions.MultivariateNormalDiag(loc=[0.] * self.latent_dim, scale_diag=[1.] * self.latent_dim)
         latent_loss = tfp.distributions.kl_divergence(latent_dist, prior_dist)
 
-        loss = tf.reduce_mean(recon_loss + latent_loss)
+        loss = tf.reduce_mean(recon_loss) + tf.reduce_mean(latent_loss)
         return loss
 
 
