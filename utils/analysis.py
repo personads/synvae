@@ -22,7 +22,7 @@ def get_closest(centroid, latents):
 
     dists = list(enumerate(dists))
     dists = sorted(dists, key=lambda el: el[1])
-    dist_idcs, dists = zip(*dists)
+    latent_idcs, dists = zip(*dists)
     return latent_idcs, dists
 
 def calc_metrics(latents, labels, sims, num_labels, prec_ranks):
@@ -129,11 +129,12 @@ def gen_eval_task(mean_latents, latents, num_examples, num_tasks):
     # get examples
     example_idcs = sorted(np.random.choice((num_examples + num_tasks), num_examples, replace=False))
     examples = np.squeeze(trio_sample_idcs[:,example_idcs].flatten())
+    examples = examples.tolist()
     trio_sample_idcs[:,example_idcs] = -1
     # get tasks
     task_idcs = np.where(trio_sample_idcs >= 0.)
     task_trios = np.reshape(trio_sample_idcs[task_idcs], [3, num_tasks])
-    task_trios = [list(task_trios[:, i]) for i in range(num_tasks)]
+    task_trios = [task_trios[:, i].tolist() for i in range(num_tasks)]
     # randomly select truths for tasks
     tasks = []
     for trio in task_trios:

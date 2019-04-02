@@ -1,6 +1,8 @@
 import argparse, logging, os, sys
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
+import tensorflow as tf
+
 from data.cifar import Cifar
 
 def parse_arguments(exp_name):
@@ -59,7 +61,7 @@ def load_data(data_name, split, data_path=None):
         images[images < .5] = 0.
         label_descs = [str(i) for i in range(10)]
         num_labels = len(label_descs)
-    elif args.task == 'cifar':
+    elif data_name == 'cifar':
         cifar = Cifar(data_path)
         images = cifar.data
         labels = cifar.labels

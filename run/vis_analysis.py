@@ -37,9 +37,9 @@ if __name__ == '__main__':
 
     # set up visual model
     if args.task == 'mnist':
-        visual_vae = MnistVae(latent_dim=512, batch_size=args.batch_size)
+        model = MnistVae(latent_dim=50, batch_size=args.batch_size)
     elif args.task == 'cifar':
-        visual_vae = CifarVae(latent_dim=512, batch_size=args.batch_size)
+        model = CifarVae(latent_dim=512, batch_size=args.batch_size)
     model.build()
 
     # load data
@@ -70,8 +70,7 @@ if __name__ == '__main__':
                 sys.stdout.flush()
                 batch = sess.run(next_op)
                 batch_idx += 1
-                epsilons = np.zeros((batch.shape[0], cifar_vae.latent_dim))
-                cur_loss, cur_recons, cur_latents = sess.run([cifar_vae.loss, cifar_vae.reconstructions, cifar_vae.latents], feed_dict={cifar_vae.images: batch, cifar_vae.epsilons: epsilons})
+                cur_loss, cur_recons, cur_latents = sess.run([model.loss, model.reconstructions, model.latents], feed_dict={model.images: batch})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                 # append to result
                 if (reconstructions is None) or (latents is None):

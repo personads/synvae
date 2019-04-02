@@ -20,8 +20,8 @@ if __name__ == '__main__':
     mnist_vae.build()
     # load MNIST
     (train_images, _), (_, _) = tf.keras.datasets.mnist.load_data()
+    valid_images = train_images[50000:]
     train_images = train_images[:50000]
-    valid_images = valid_images[50000:]
     train_images = train_images.reshape(train_images.shape[0], 28, 28, 1).astype('float32')
     valid_images = valid_images.reshape(valid_images.shape[0], 28, 28, 1).astype('float32')
     logging.info("Loaded %d training, %d validation images from MNIST." % (train_images.shape[0], valid_images.shape[0]))
