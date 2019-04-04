@@ -23,8 +23,9 @@ if __name__ == '__main__':
     arg_parser.add_argument('model_path', help='path to SynVAE model')
     arg_parser.add_argument('data_path', help='path to data (required for CIFAR)')
     arg_parser.add_argument('out_path', help='path to output')
-    arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size')
-    arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default "1,5,10")')
+    arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size (default: 200)')
+    arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default: "1,5,10")')
+    arg_parser.add_argument('--perplexity', type=int, default=30, help='perplexity of distributions used to approximate the data space (default: 30)')
     args = arg_parser.parse_args()
 
     # check if directory already exists
@@ -77,12 +78,11 @@ if __name__ == '__main__':
                 batch_idx += 1
 
                 # inference step
-                epsilons = np.zeros((batch.shape[0], model.latent_dim))
                 temperature = 0.5
                 cur_loss, cur_audios, cur_recons, cur_vis_latents, cur_aud_latents = sess.run([
                         model.loss, model.audios, model.reconstructions, model.vis_latents, model.aud_latents
                     ], feed_dict={
-                        model.images: batch, model.epsilons: epsilons, model.temperature: temperature
+                        model.images: batch, model.temperature: temperature
                     })
 
                 # append to result
@@ -114,6 +114,10 @@ if __name__ == '__main__':
     vis_sims = calc_sims(vis_latents)
     aud_sims = calc_sims(aud_latents)
 
+    logging.info("Calculate KL divergence between latents (perplexity: %d)..." % args.perplexity)
+    kl = calc_latent_kl(vis_latents, aud_latents, perplexity=args.perplexity)
+    logging.info("Audio-visual KL divergence: %.2f." % kl)
+
     # parse precision ranks
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
@@ -121,10 +125,8 @@ if __name__ == '__main__':
     vis_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(vis_latents, labels, vis_sims, num_labels, prec_ranks)
     for rank in prec_ranks:
         log_metrics(label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
-    np.save(os.path.join(args.out_path, 'vis_mean_latents.npy'), vis_mean_latents)
 
     logging.info("Calculating metrics for auditive latents...")
     aud_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(aud_latents, labels, aud_sims, num_labels, prec_ranks)
     for rank in prec_ranks:
         log_metrics(label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
-    np.save(os.path.join(args.out_path, 'aud_mean_latents.npy'), aud_mean_latents)

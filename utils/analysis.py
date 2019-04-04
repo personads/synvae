@@ -5,15 +5,23 @@ import logging, random
 
 import numpy as np
 import tensorflow as tf
+import sklearn.manifold.t_sne as tsne
 
 from collections import defaultdict, OrderedDict
 
 def calc_sims(latents):
+    '''Calculate pairwise cosine similarities'''
     dot_mat = np.dot(latents, latents.T)
     nrm_mat = np.linalg.norm(latents, axis=1)
     mlt_mat = np.outer(nrm_mat, nrm_mat)
     sims = dot_mat / mlt_mat
     return sims
+
+def calc_dists(latents):
+    '''Calculate pairwise Euclidean distances'''
+    sum_mat = np.sum(np.square(latents), axis=1)
+    dists = np.add(np.add(-2 * np.dot(latents, latents.T), sum_mat).T, sum_mat)
+    return dists
 
 def get_closest(centroid, latents):
     dists = (latents - centroid)**2
@@ -26,6 +34,7 @@ def get_closest(centroid, latents):
     return latent_idcs, dists
 
 def calc_metrics(latents, labels, sims, num_labels, prec_ranks):
+    # setup result arrays
     mean_latents = np.zeros([num_labels, latents.shape[1]])
     rel_sim_by_label = np.zeros(num_labels)
     oth_sim_by_label = np.zeros(num_labels)
@@ -78,6 +87,14 @@ def calc_metrics(latents, labels, sims, num_labels, prec_ranks):
     logging.info("\rCalculated metrics for %d latents.%s" % (latents.shape[0], ' '*16))
 
     return mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision
+
+def calc_latent_kl(vis_latents, aud_latents, perplexity):
+    vis_dists = calc_dists(vis_latents)
+    vis_distr = tsne._joint_probabilities(distances=vis_dists, desired_perplexity=perplexity, verbose=False)
+    aud_dists = calc_dists(aud_latents)
+    aud_distr = tsne._joint_probabilities(distances=aud_dists, desired_perplexity=perplexity, verbose=False)
+    kl = 2.0 * np.dot(vis_distr, np.log(vis_distr / aud_distr))
+    return kl
 
 def log_metrics(label_descs, top_n, rel_sim_by_label, oth_sim_by_label, precision_by_label):
     logging.info("Overall metrics:")

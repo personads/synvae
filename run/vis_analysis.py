@@ -20,10 +20,10 @@ if __name__ == '__main__':
     arg_parser.add_argument('model_path', help='path to VisualVAE model')
     arg_parser.add_argument('data_path', help='path to data (required for CIFAR)')
     arg_parser.add_argument('out_path', help='path to output')
-    arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size')
-    arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default "1,5,10")')
-    arg_parser.add_argument('--num_examples', default=4, help='number of examples for evaluation (default 4)')
-    arg_parser.add_argument('--num_tasks', default=20, help='number of tasks for evaluation (default 20)')
+    arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size (default: 200)')
+    arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default: "1,5,10")')
+    arg_parser.add_argument('--num_examples', default=4, help='number of examples for evaluation (default: 4)')
+    arg_parser.add_argument('--num_tasks', default=20, help='number of tasks for evaluation (default: 20)')
     args = arg_parser.parse_args()
 
     # check if directory already exists
