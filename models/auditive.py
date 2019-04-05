@@ -3,10 +3,12 @@ import copy, logging
 import numpy as np
 import tensorflow as tf
 
+from models.base import BaseModel
+
 from magenta import music
 from magenta.models.music_vae import configs
 
-class MusicVae:
+class MusicVae(BaseModel):
     """Wrapper class for a pre-trained MusicVAE model (based on magenta.models.music_vae.TrainedModel).
     """
     def __init__(self, config_name, batch_size):
@@ -66,11 +68,6 @@ class MusicVae:
         self.audios, self.lengths = self.build_decoder(self.z_input)
         # debug info
         logging.info(self)
-
-
-    def restore(self, tf_session, path, var_list=None):
-        tf.train.Saver(var_list=var_list).restore(tf_session, path)
-        logging.info("[MusicVae] Restored model from '%s'." % path)
 
 
     def save_midi(self, audio_tensor, path):
