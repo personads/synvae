@@ -12,8 +12,8 @@ class BaseModel:
         logging.info("[%s] Saved model to '%s'." % (self.__class__.__name__, save_path))
 
 
-    def restore(self, tf_session, path):
-        tf.train.Saver().restore(tf_session, path)
+    def restore(self, tf_session, path, var_list=None):
+        tf.train.Saver(var_list).restore(tf_session, path)
         logging.info("[%s] Restored model from '%s'." % (self.__class__.__name__, path))
 
 
@@ -21,7 +21,7 @@ class BaseModel:
         pass
 
 
-    def run_test_step(self, tf_session, batch_idx, batch):
+    def run_test_step(self, tf_session, batch, batch_idx, out_path):
         pass
 
 
@@ -51,7 +51,7 @@ class BaseModel:
                     # exit batch loop and proceed to next epoch
                     break
             # write epoch summary
-            tf_writer.add_summary(summaries, self.epoch)
+            tf_writer.add_summary(cur_summaries, self.epoch)
             logging.info("\r[%s] Completed epoch %d/%d (%d batches). avg_loss %.2f.%s" % (self.__class__.__name__, self.epoch, max_epochs, batch_idx, avg_loss, ' '*32))
 
             # check performance on test split
@@ -79,7 +79,7 @@ class BaseModel:
                 batch = tf_session.run(next_op)
                 batch_idx += 1
                 temperature = 0.5
-                cur_loss = self.run_test_step(tf_session, batch, batch_idx)
+                cur_loss = self.run_test_step(tf_session, batch, batch_idx, out_path)
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
             # end of dataset
             except tf.errors.OutOfRangeError:

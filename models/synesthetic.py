@@ -103,13 +103,13 @@ class SynestheticVae(BaseModel):
         self.vis_model.restore(tf_session=tf_session, path=path, var_list=var_map)
 
 
-    def run_train_step(tf_session, batch):
+    def run_train_step(self, tf_session, batch):
         temperature = 1.0
         _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, self.merge_op], feed_dict={self.images: batch, self.temperature: temperature})
         return cur_loss, summaries
 
 
-    def run_test_step(tf_session, batch, batch_idx, export_step=5):
+    def run_test_step(self, tf_session, batch, batch_idx, out_path, export_step=5):
         temperature = 0.5
         cur_loss, audios, reconstructions = tf_session.run([self.loss, self.audios, self.reconstructions], feed_dict={self.images: batch, self.temperature: temperature})
         # save original image and reconstruction

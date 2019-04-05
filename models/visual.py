@@ -78,7 +78,7 @@ class VisualVae(BaseModel):
         return cur_loss, summaries
 
 
-    def run_test_step(self, tf_session, batch, batch_idx):
+    def run_test_step(self, tf_session, batch, batch_idx, out_path):
         cur_loss, reconstructions = tf_session.run([self.loss, self.reconstructions], feed_dict={self.images: batch})
         # save original image and reconstruction
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
