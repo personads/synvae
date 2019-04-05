@@ -44,6 +44,8 @@ if __name__ == '__main__':
 
     # load data
     images, labels, label_descs, num_labels = load_data(args.task, split='test', data_path=args.data_path)
+    # images = images[:1000]
+    # labels = labels[:1000]
 
     # set up TF datasets
     dataset = tf.data.Dataset.from_tensor_slices(images).batch(args.batch_size)
@@ -93,13 +95,13 @@ if __name__ == '__main__':
     logging.info("\rSaved %d images and reconstructions." % images.shape[0])
 
     logging.info("Calculating similarities...")
-    sims = calc_sims(latents)
+    sims = calc_dists(latents)
 
     # parse precision ranks
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
     logging.info("Calculating metrics...")
-    mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(latents, labels, sims, num_labels, prec_ranks)
+    mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
         log_metrics(label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
 

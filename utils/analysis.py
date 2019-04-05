@@ -33,7 +33,7 @@ def get_closest(centroid, latents):
     latent_idcs, dists = zip(*dists)
     return latent_idcs, dists
 
-def calc_metrics(latents, labels, sims, num_labels, prec_ranks):
+def calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='cosine'):
     # setup result arrays
     mean_latents = np.zeros([num_labels, latents.shape[1]])
     rel_sim_by_label = np.zeros(num_labels)
@@ -47,8 +47,8 @@ def calc_metrics(latents, labels, sims, num_labels, prec_ranks):
 
         lbl = labels[idx]
         # sort neighbours by similarity
-        cur_sims = list(enumerate(sims[idx]))
-        cur_sims = sorted(cur_sims, key=lambda el: el[1], reverse=True)
+        cur_sims = list(enumerate(np.concatenate((sims[idx, :idx], sims[idx, idx+1:]))))
+        cur_sims = sorted(cur_sims, key=lambda el: el[1], reverse=(sim_metric == 'cosine'))
         # get sorted neighbours and similarities
         sim_idcs, sim_vals = zip(*cur_sims)
         sim_idcs, sim_vals = np.array(sim_idcs), np.array(sim_vals)
@@ -65,7 +65,7 @@ def calc_metrics(latents, labels, sims, num_labels, prec_ranks):
         # calculate precision/recall at top n
         for rank in prec_ranks:
             # get top n
-            top_idcs, top_vals = sim_idcs[:rank+1], sim_vals[:rank+1]
+            top_idcs, top_vals = sim_idcs[:rank], sim_vals[:rank]
             # count TP/FP and calculate precision
             tp = np.sum(labels[top_idcs] == lbl)
             fp = np.sum(labels[top_idcs] != lbl)
@@ -89,11 +89,14 @@ def calc_metrics(latents, labels, sims, num_labels, prec_ranks):
     return mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision
 
 def calc_latent_kl(vis_latents, aud_latents, perplexity):
+    logging.info("Calculating joint probability distribution of visual latent space...")
     vis_dists = calc_dists(vis_latents)
-    vis_distr = tsne._joint_probabilities(distances=vis_dists, desired_perplexity=perplexity, verbose=False)
+    vis_distr = tsne._joint_probabilities(distances=vis_dists, desired_perplexity=perplexity, verbose=True)
+    logging.info("Calculating joint probability distribution of auditive latent space...")
     aud_dists = calc_dists(aud_latents)
-    aud_distr = tsne._joint_probabilities(distances=aud_dists, desired_perplexity=perplexity, verbose=False)
+    aud_distr = tsne._joint_probabilities(distances=aud_dists, desired_perplexity=perplexity, verbose=True)
     kl = 2.0 * np.dot(vis_distr, np.log(vis_distr / aud_distr))
+    logging.info("Calculated KL divergence of audio-visual latent spaces with perplexity %d: %.2f." % (perplexity, kl))
     return kl
 
 def log_metrics(label_descs, top_n, rel_sim_by_label, oth_sim_by_label, precision_by_label):

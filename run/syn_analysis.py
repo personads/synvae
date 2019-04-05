@@ -111,22 +111,21 @@ if __name__ == '__main__':
     logging.info("\rSaved %d images, audios and reconstructions." % images.shape[0])
 
     logging.info("Calculating similarities...")
-    vis_sims = calc_sims(vis_latents)
-    aud_sims = calc_sims(aud_latents)
+    vis_sims = calc_dists(vis_latents)
+    aud_sims = calc_dists(aud_latents)
 
-    logging.info("Calculate KL divergence between latents (perplexity: %d)..." % args.perplexity)
+    logging.info("Calculating KL divergence between latents (perplexity: %d)..." % args.perplexity)
     kl = calc_latent_kl(vis_latents, aud_latents, perplexity=args.perplexity)
-    logging.info("Audio-visual KL divergence: %.2f." % kl)
 
     # parse precision ranks
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
     logging.info("Calculating metrics for visual latents...")
-    vis_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(vis_latents, labels, vis_sims, num_labels, prec_ranks)
+    vis_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(vis_latents, labels, vis_sims, num_labels, prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
         log_metrics(label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
 
     logging.info("Calculating metrics for auditive latents...")
-    aud_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(aud_latents, labels, aud_sims, num_labels, prec_ranks)
+    aud_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(aud_latents, labels, aud_sims, num_labels, prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
         log_metrics(label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
