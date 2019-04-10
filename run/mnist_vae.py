@@ -38,10 +38,8 @@ if __name__ == '__main__':
     num_batches_test = valid_images.shape[0] // args.batch_size
     train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(train_images.shape[0]).batch(args.batch_size)
     train_iterator = train_dataset.make_initializable_iterator()
-    train_next = train_iterator.get_next()
     valid_dataset = tf.data.Dataset.from_tensor_slices(valid_images).batch(args.batch_size)
     valid_iterator = valid_dataset.make_initializable_iterator()
-    valid_next = valid_iterator.get_next()
 
     epochs = args.epochs
     with tf.Session() as sess:
@@ -49,6 +47,5 @@ if __name__ == '__main__':
         sess.run(tf.global_variables_initializer())
         # initialize FileWriter for TensorBoard
         tf_writer = tf.summary.FileWriter(tb_path, graph=sess.graph)
-        # initialize variables
-        sess.run(tf.global_variables_initializer())
+        # training loop
         mnist_vae.train(sess, train_iterator, valid_iterator, epochs, model_path, out_path, tf_writer)

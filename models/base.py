@@ -78,7 +78,6 @@ class BaseModel:
                 sys.stdout.flush()
                 batch = tf_session.run(next_op)
                 batch_idx += 1
-                temperature = 0.5
                 cur_loss = self.run_test_step(tf_session, batch, batch_idx, out_path)
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
             # end of dataset

@@ -88,33 +88,6 @@ class VisualVae(BaseModel):
         return cur_loss
 
 
-    def test(self, tf_session, iterator, next_op, out_path, export_step=5):
-        tf_session.run(iterator.initializer)
-        # iterate over batches
-        avg_loss = 0.
-        batch_idx = 0
-        while True:
-            try:
-                sys.stdout.write("\rEvaluating batch %d..." % (batch_idx))
-                sys.stdout.flush()
-                batch = tf_session.run(next_op)
-                batch_idx += 1
-                cur_loss, reconstructions = tf_session.run([self.loss, self.reconstructions], feed_dict={self.images: batch})
-                avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
-                # save original image and reconstruction
-                if (export_step > 0) and ((batch_idx-1) % export_step == 0):
-                    if self.epoch == 1:
-                        self.save_image(batch[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_orig.png'))
-                    self.save_image(reconstructions[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_recon.png'))
-            # end of dataset
-            except tf.errors.OutOfRangeError:
-                # exit batch loop and proceed to next epoch
-                break
-        logging.info("\rCompleted evaluation (%d batches). avg_loss %.2f." % (batch_idx, avg_loss))
-        return avg_loss
-
-
-
 class CifarVae(VisualVae):
     def __init__(self, latent_dim, batch_size):
         super().__init__(img_height=32, img_width=32, img_depth=3, latent_dim=latent_dim, batch_size=batch_size, learning_rate=1e-4)

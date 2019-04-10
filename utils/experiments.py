@@ -9,7 +9,7 @@ def parse_arguments(exp_name):
     arg_parser = argparse.ArgumentParser(description=exp_name)
     arg_parser.add_argument('exp_path', help='path to experiment files (model checkpoints, TensorBoard logs, model outputs)')
     arg_parser.add_argument('--epochs', type=int, default=100, help='number of training epochs')
-    arg_parser.add_argument('--batch_size', type=int, default=100, help='batch size for training and evaluation')
+    arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size for training and evaluation')
     return arg_parser
 
 
@@ -71,3 +71,15 @@ def load_data(data_name, split, data_path=None):
     logging.info("Loaded %d %s images from %s." % (images.shape[0], split, data_name.upper()))
 
     return images, labels, label_descs, num_labels
+
+
+def split_data(images, labels, task):
+    split_idx = 0
+    if task == 'mnist':
+        split_idx = 50000
+    elif task == 'cifar':
+        split_idx = int(images.shape[0]*.8)
+    train_images, train_labels = images[:split_idx], labels[:split_idx]
+    valid_images, valid_labels = images[split_idx:], labels[split_idx:]
+    logging.info("Split %s into %d training and %d validation images." % (task.upper(), train_images.shape[0], valid_images.shape[0]))
+    return train_images, train_labels, valid_images, valid_labels
