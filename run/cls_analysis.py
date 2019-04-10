@@ -61,10 +61,10 @@ if __name__ == '__main__':
                 sys.stdout.flush()
                 batch = sess.run(next_op)
                 batch_idx += 1
-                cur_loss, cur_predictions = sess.run([model.loss, model.predictions], feed_dict={model.images: batch['images']})
+                cur_loss, cur_predictions = sess.run([model.loss, model.predictions], feed_dict={model.images: batch['images'], model.labels: batch['labels']})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
                 # append to result
-                if reconstructions is None:
+                if predictions is None:
                     predictions = cur_predictions
                 else:
                     predictions = np.concatenate((predictions, cur_predictions), axis=0)
@@ -75,7 +75,7 @@ if __name__ == '__main__':
     logging.info("\rClassified %d images with avg_loss %.2f." % (predictions.shape[0], avg_loss))
 
     logging.info("Calculating metrics...")
-    total_accuracy, label_accuracy, label_precision, label_recall = calc_cls_metrics(labels, predictions)
+    total_precision, label_precision, label_recall, label_accuracy = calc_cls_metrics(labels, predictions)
 
     logging.info("Metrics by class:")
     for label_idx, label in enumerate(label_descs):
@@ -84,4 +84,4 @@ if __name__ == '__main__':
             label_precision[label_idx],
             label_recall[label_idx]
             ))
-    logging.info("Total Accuracy: %.2f." % total_accuracy)
+    logging.info("Total Precision: %.2f." % total_precision)
