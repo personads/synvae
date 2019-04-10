@@ -104,6 +104,29 @@ def calc_latent_kl(vis_latents, aud_latents, perplexity):
     return kl
 
 
+def calc_cls_metrics(labels, predictions):
+    # compute total accuracy
+    pred_labels = np.argmax(predictions, axis=1)
+    total_accuracy = np.mean(np.sum(labels == pred_labels))
+
+    # compute accuracy, precision and recall by label
+    label_accuracy = np.zeros(predictions.shape[1])
+    label_precision = np.zeros(predictions.shape[1])
+    label_recall = np.zeros(predictions.shape[1])
+    for lbl in range(predictions.shape[1]):
+        lbl_idcs = np.where(labels == (lbl * np.ones_like(labels)))
+        oth_idcs = np.where(labels != (lbl * np.ones_like(labels)))
+        tp = np.sum(predictions[lbl_idcs] == lbl)
+        fp = np.sum(predictions[oth_idcs] == lbl)
+        tn = np.sum(predictions[oth_idcs] != lbl)
+        fn = np.sum(predictions[lbl_idcs] != lbl)
+        label_accuracy[lbl] = (tp + tn) / (tp + fp + tn + fn)
+        label_precision[lbl] = tp / (tp + fp)
+        label_recall[lbl] = tp / (tp + fn)
+
+    return total_accuracy, label_accuracy, label_precision, label_recall
+
+
 def log_metrics(label_descs, top_n, rel_sim_by_label, oth_sim_by_label, precision_by_label):
     logging.info("Overall metrics:")
     for label_idx, label in enumerate(label_descs):
