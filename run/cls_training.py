@@ -11,8 +11,6 @@ from models.classifiers import MnistCnn, CifarCnn
 
 if __name__ == '__main__':
     arg_parser = parse_arguments('VisualCNN - Training')
-    arg_parser.add_argument('task', choices=['mnist', 'cifar'], help='name of the task (mnist, cifar)')
-    arg_parser.add_argument('data_path', help='path to data (not required for original MNIST)')
     args = arg_parser.parse_args()
     model_path, tb_path, out_path, log_path = make_experiment_dir(args.exp_path)
     setup_logging(log_path)

@@ -7,7 +7,9 @@ from data.cifar import Cifar
 
 def parse_arguments(exp_name):
     arg_parser = argparse.ArgumentParser(description=exp_name)
+    arg_parser.add_argument('task', choices=['mnist', 'cifar'], help='name of the task (mnist, cifar)')
     arg_parser.add_argument('exp_path', help='path to experiment files (model checkpoints, TensorBoard logs, model outputs)')
+    arg_parser.add_argument('data_path', help='path to data (not required for original MNIST)')
     arg_parser.add_argument('--beta', type=float, default=1., help='beta parameter for weighting KL-divergence (default: 1.0)')
     arg_parser.add_argument('--epochs', type=int, default=100, help='number of training epochs (default: 100)')
     arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size for training and evaluation (default: 200)')
