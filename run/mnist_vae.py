@@ -16,7 +16,7 @@ if __name__ == '__main__':
     model_path, tb_path, out_path, log_path = make_experiment_dir(args.exp_path)
     setup_logging(log_path)
     # set up model
-    mnist_vae = MnistVae(latent_dim=50, batch_size=args.batch_size)
+    mnist_vae = MnistVae(latent_dim=50, beta=args.beta, batch_size=args.batch_size)
     mnist_vae.build()
     # load MNIST
     (train_images, _), (_, _) = tf.keras.datasets.mnist.load_data()

@@ -19,7 +19,7 @@ if __name__ == '__main__':
     model_path, tb_path, out_path, log_path = make_experiment_dir(args.exp_path)
     setup_logging(log_path)
     # set up model
-    cifar_vae = CifarVae(latent_dim=512, batch_size=args.batch_size)
+    cifar_vae = CifarVae(latent_dim=512, beta=args.beta, batch_size=args.batch_size)
     cifar_vae.build()
     # load CIFAR
     cifar = Cifar(args.cifar_path)

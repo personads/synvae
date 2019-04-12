@@ -3,16 +3,16 @@ import logging, os, sys
 import numpy as np
 import PIL
 import tensorflow as tf
-import tensorflow_probability as tfp
 
 from models.base import BaseModel
 
 class VisualVae(BaseModel):
-    def __init__(self, img_height, img_width, img_depth, latent_dim, batch_size, learning_rate):
+    def __init__(self, img_height, img_width, img_depth, latent_dim, beta, batch_size, learning_rate):
         self.img_height = img_height
         self.img_width = img_width
         self.img_depth = img_depth
         self.latent_dim = latent_dim
+        self.beta = beta
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epoch = 0
@@ -23,7 +23,7 @@ class VisualVae(BaseModel):
     def __repr__(self):
         res  = '<VisualVae: '
         res += str(self.images.shape[1:])
-        res += ' -> ' + str(self.latent_dim)
+        res += ' -> %d (β=%s)' % (self.latent_dim, str(self.beta))
         res += ' -> ' + str(self.reconstructions.shape[1:])
         res += '>'
         return res
@@ -40,10 +40,10 @@ class VisualVae(BaseModel):
 
 
     def build(self):
-        self.latents, self.latent_dist = self.build_encoder(self.images)
+        self.latents, means, sigmas = self.build_encoder(self.images)
         self.reconstructions = self.build_decoder(self.latents)
         # set up loss
-        self.loss = self.calc_loss(self.images, self.reconstructions, self.latent_dist)
+        self.loss = self.calc_loss(self.images, self.reconstructions, means, sigmas)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
@@ -55,16 +55,14 @@ class VisualVae(BaseModel):
         logging.info(self)
 
 
-    def calc_loss(self, originals, reconstructions, latent_dist):
-        originals_flat = tf.reshape(originals, (-1, self.img_height * self.img_width * self.img_depth))
-        reconstructions_flat = tf.reshape(reconstructions, (-1, self.img_height * self.img_width * self.img_depth))
-
-        recon_loss = tf.reduce_sum(tf.square(originals_flat - reconstructions_flat), axis=1) # MSE
-
-        prior_dist = tfp.distributions.MultivariateNormalDiag(loc=[0.] * self.latent_dim, scale_diag=[1.] * self.latent_dim)
-        latent_loss = tfp.distributions.kl_divergence(latent_dist, prior_dist)
-
-        loss = tf.reduce_mean(recon_loss) + tf.reduce_mean(latent_loss)
+    def calc_loss(self, originals, reconstructions, means, sigmas):
+        # MSE using flattened images for element-wise operations
+        originals = tf.reshape(originals, [-1, self.img_width * self.img_height * self.img_depth])
+        reconstructions = tf.reshape(reconstructions, [-1, self.img_width * self.img_height * self.img_depth])
+        self.recon_loss = tf.reduce_mean(tf.reduce_sum(tf.square(originals - reconstructions), axis=-1))
+        # KL divergence
+        self.latent_loss = tf.reduce_mean(-0.5 * tf.reduce_sum(1. + sigmas - tf.square(means) - tf.exp(sigmas), axis=-1)) # mean KL over latent dims
+        loss = self.recon_loss + self.beta * self.latent_loss
         return loss
 
 
@@ -74,23 +72,25 @@ class VisualVae(BaseModel):
 
 
     def run_train_step(self, tf_session, batch):
-        _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, self.merge_op], feed_dict={self.images: batch})
-        return cur_loss, summaries
+        _, loss, recon_loss, latent_loss, summaries = tf_session.run([self.train_op, self.loss, self.recon_loss, self.latent_loss, self.merge_op], feed_dict={self.images: batch})
+        losses = {'All': loss, 'MSE': recon_loss, 'KL': latent_loss}
+        return losses, summaries
 
 
-    def run_test_step(self, tf_session, batch, batch_idx, out_path):
-        cur_loss, reconstructions = tf_session.run([self.loss, self.reconstructions], feed_dict={self.images: batch})
+    def run_test_step(self, tf_session, batch, batch_idx, out_path, export_step=5):
+        loss, recon_loss, latent_loss, reconstructions = tf_session.run([self.loss, self.recon_loss, self.latent_loss, self.reconstructions], feed_dict={self.images: batch})
+        losses = {'All': loss, 'MSE': recon_loss, 'KL': latent_loss}
         # save original image and reconstruction
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
             if self.epoch == 1:
                 self.save_image(batch[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_orig.png'))
             self.save_image(reconstructions[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_recon.png'))
-        return cur_loss
+        return losses
 
 
 class CifarVae(VisualVae):
-    def __init__(self, latent_dim, batch_size):
-        super().__init__(img_height=32, img_width=32, img_depth=3, latent_dim=latent_dim, batch_size=batch_size, learning_rate=1e-4)
+    def __init__(self, latent_dim, beta, batch_size):
+        super().__init__(img_height=32, img_width=32, img_depth=3, latent_dim=latent_dim, beta=beta, batch_size=batch_size, learning_rate=1e-3)
 
 
     def build_encoder(self, images):
@@ -100,11 +100,11 @@ class CifarVae(VisualVae):
         conv3 = tf.keras.layers.Conv2D(filters=256, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv2)
         flat = tf.keras.layers.Flatten()(conv3)
         dense = tf.keras.layers.Dense(units=(self.img_height//8 * self.img_width//8 * 256), activation=tf.nn.relu)(flat)
-        means = tf.keras.layers.Dense(self.latent_dim)(dense)
-        sigmas = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.softplus)(dense)
-        latent_dist = tfp.distributions.MultivariateNormalDiag(loc=means, scale_diag=sigmas)
-        latents = latent_dist.sample()
-        return latents, latent_dist
+        means = tf.keras.layers.Dense(self.latent_dim)(flat)
+        sigmas = tf.keras.layers.Dense(self.latent_dim)(flat)
+        epsilons = tf.random.normal((self.batch_size, self.latent_dim), mean=0., stddev=1.)
+        latents = means + tf.exp(.5 * sigmas) * epsilons
+        return latents, means, sigmas
 
 
     def build_decoder(self, latents):
@@ -119,8 +119,8 @@ class CifarVae(VisualVae):
 
 
 class MnistVae(VisualVae):
-    def __init__(self, latent_dim, batch_size):
-        super().__init__(img_height=28, img_width=28, img_depth=1, latent_dim=latent_dim, batch_size=batch_size, learning_rate=1e-4)
+    def __init__(self, latent_dim, beta, batch_size):
+        super().__init__(img_height=28, img_width=28, img_depth=1, latent_dim=latent_dim, beta=beta, batch_size=batch_size, learning_rate=1e-3)
 
 
     def build_encoder(self, images):
@@ -129,10 +129,10 @@ class MnistVae(VisualVae):
         conv2 = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=(2, 2), activation=tf.nn.relu)(conv1)
         flat = tf.keras.layers.Flatten()(conv2)
         means = tf.keras.layers.Dense(self.latent_dim)(flat)
-        sigmas = tf.keras.layers.Dense(self.latent_dim, activation=tf.nn.softplus)(flat)
-        latent_dist = tfp.distributions.MultivariateNormalDiag(loc=means, scale_diag=sigmas)
-        latents = latent_dist.sample()
-        return latents, latent_dist
+        sigmas = tf.keras.layers.Dense(self.latent_dim)(flat)
+        epsilons = tf.random.normal((self.batch_size, self.latent_dim), mean=0., stddev=1.)
+        latents = means + tf.exp(.5 * sigmas) * epsilons
+        return latents, means, sigmas
 
 
     def build_decoder(self, latents):

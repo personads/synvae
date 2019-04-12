@@ -2,6 +2,8 @@ import logging, os, sys
 
 import tensorflow as tf
 
+from collections import defaultdict
+
 class BaseModel:
     def __init__():
         pass
@@ -36,15 +38,18 @@ class BaseModel:
             self.epoch += 1
             tf_session.run(train_iter.initializer)
             # iterate over batches
-            avg_loss = 0.
+            avg_losses = defaultdict(float)
             batch_idx = 0
             while True:
                 try:
                     batch = tf_session.run(next_op)
                     batch_idx += 1
-                    cur_loss, cur_summaries = self.run_train_step(tf_session, batch)
-                    avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
-                    sys.stdout.write("\rEpoch %d/%d. Batch %d. avg_loss %.2f. cur_loss %.2f.   " % (self.epoch, max_epochs, batch_idx, avg_loss, cur_loss))
+                    cur_losses, cur_summaries = self.run_train_step(tf_session, batch)
+                    for loss in cur_losses:
+                        avg_losses[loss] = ((avg_losses[loss] * (batch_idx - 1)) + cur_losses[loss]) / batch_idx
+                    avg_losses_str = ' | '.join(['%s: %.2f' % (l, avg_losses[l]) for l in sorted(avg_losses)])
+                    cur_losses_str = ' | '.join(['%s: %.2f' % (l, cur_losses[l]) for l in sorted(cur_losses)])
+                    sys.stdout.write("\rEpoch %d/%d. Batch %d. Average losses (%s). Current losses (%s).   " % (self.epoch, max_epochs, batch_idx, avg_losses_str, cur_losses_str))
                     sys.stdout.flush()
                 # end of dataset
                 except tf.errors.OutOfRangeError:
@@ -52,25 +57,26 @@ class BaseModel:
                     break
             # write epoch summary
             tf_writer.add_summary(cur_summaries, self.epoch)
-            logging.info("\r[%s] Completed epoch %d/%d (%d batches). avg_loss %.2f.%s" % (self.__class__.__name__, self.epoch, max_epochs, batch_idx, avg_loss, ' '*32))
+            logging.info("\r[%s] Completed epoch %d/%d (%d batches). Average losses (%s).%s" % (self.__class__.__name__, self.epoch, max_epochs, batch_idx, avg_losses_str, ' '*len(cur_losses_str)))
 
             # check performance on test split
-            valid_loss = self.test(tf_session, valid_iter, valid_next_op, out_path)
+            valid_losses = self.test(tf_session, valid_iter, valid_next_op, out_path)
+            valid_losses_str = ' | '.join(['%s: %.2f' % (l, valid_losses[l]) for l in sorted(valid_losses)])
            
             # save latest model
             logging.info("Saving latest model...")
             self.save(tf_session, os.path.join(model_path, 'latest_model.ckpt'))
             # check if model has improved
-            if (min_loss is None) or (valid_loss < min_loss):
-                logging.info("Saving best model with valid_loss %.2f..." % valid_loss)
+            if (min_loss is None) or (valid_losses['All'] < min_loss):
+                logging.info("Saving best model with validation losses (%s)..." % valid_losses_str)
                 self.save(tf_session, os.path.join(model_path, 'best_model.ckpt'))
-                min_loss = valid_loss
+                min_loss = valid_losses['All']
 
 
     def test(self, tf_session, iterator, next_op, out_path):
         tf_session.run(iterator.initializer)
         # iterate over batches
-        avg_loss = 0.
+        avg_losses = defaultdict(float)
         batch_idx = 0
         while True:
             try:
@@ -78,11 +84,13 @@ class BaseModel:
                 sys.stdout.flush()
                 batch = tf_session.run(next_op)
                 batch_idx += 1
-                cur_loss = self.run_test_step(tf_session, batch, batch_idx, out_path)
-                avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
+                cur_losses = self.run_test_step(tf_session, batch, batch_idx, out_path)
+                for loss in cur_losses:
+                    avg_losses[loss] = ((avg_losses[loss] * (batch_idx - 1)) + cur_losses[loss]) / batch_idx
             # end of dataset
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch
                 break
-        logging.info("\r[%s] Completed evaluation (%d batches). avg_loss %.2f." % (self.__class__.__name__, batch_idx, avg_loss))
-        return avg_loss
+        avg_losses_str = ' | '.join(['%s: %.2f' % (l, avg_losses[l]) for l in sorted(avg_losses)])
+        logging.info("\r[%s] Completed evaluation (%d batches). Average losses (%s)." % (self.__class__.__name__, batch_idx, avg_losses_str))
+        return avg_losses
