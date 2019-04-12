@@ -30,7 +30,7 @@ if __name__ == '__main__':
     elif args.task == 'cifar':
         vis_model = CifarVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
     # set up synesthetic model
-    model = SynestheticVae(visual_model=visual_model, auditive_model=music_vae, learning_rate=1e-3)
+    model = SynestheticVae(visual_model=vis_model, auditive_model=music_vae, learning_rate=1e-3)
     model.build()
 
     # load data
