@@ -21,7 +21,7 @@ class SynestheticVae(BaseModel):
     def __repr__(self):
         res  = '<SynestheticVae: '
         res += str(self.images.shape[1:])
-        res += ' -> ' + str(self.vis_latents.shape[1])
+        res += ' -> %s (β=%s)' % (str(self.vis_latents.shape[1]), str(self.vis_model.beta))
         res += ' -> ♪ (%d steps)' % self.aud_model.music_length
         res += ' -> ' + str(self.aud_latents.shape[1])
         res += ' -> ' + str(self.reconstructions.shape[1:])
@@ -32,11 +32,11 @@ class SynestheticVae(BaseModel):
     def build_encoder(self, images):
         # visual encoding step
         with tf.variable_scope('visual_vae_encoder'):
-            vis_latents, vis_dist = self.vis_model.build_encoder(images)
+            vis_latents, vis_means, vis_sigmas = self.vis_model.build_encoder(images)
         # audio decoding step
         with tf.variable_scope('music_vae_decoder'):
             audios, lengths = self.aud_model.build_decoder(vis_latents)
-        return audios, lengths, vis_latents, vis_dist
+        return audios, lengths, vis_latents, vis_means, vis_sigmas
 
 
     def build_decoder(self, audios, lengths):
@@ -54,14 +54,14 @@ class SynestheticVae(BaseModel):
         with tf.variable_scope('music_vae_core'):
             self.aud_model.build_core()
         # set up synesthetic encoder and decoder
-        self.audios, self.aud_lengths, self.vis_latents, self.vis_dist = self.build_encoder(self.images)
+        self.audios, self.aud_lengths, self.vis_latents, self.vis_means, self.vis_sigmas = self.build_encoder(self.images)
         self.reconstructions, self.aud_latents, self.aud_dist = self.build_decoder(self.audios, self.aud_lengths)
         # only get variables relevant to visual vae
         self.train_variables = tf.trainable_variables(scope='visual_vae')
         self.fixed_variables = [var for var in tf.trainable_variables() if var not in self.train_variables]
         # set up loss calculation
         with tf.name_scope('loss'):
-            self.loss = self.vis_model.calc_loss(self.images, self.reconstructions, self.vis_dist)
+            self.loss = self.vis_model.calc_loss(self.images, self.reconstructions, self.vis_means, self.vis_sigmas)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
@@ -105,17 +105,19 @@ class SynestheticVae(BaseModel):
 
     def run_train_step(self, tf_session, batch):
         temperature = 1.0
-        _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, self.merge_op], feed_dict={self.images: batch, self.temperature: temperature})
-        return cur_loss, summaries
+        _, loss, recon_loss, latent_loss, summaries = tf_session.run([self.train_op, self.loss, self.vis_model.recon_loss, self.vis_model.latent_loss, self.merge_op], feed_dict={self.images: batch, self.temperature: temperature})
+        losses = {'All': loss, 'MSE': recon_loss, 'KL': latent_loss}
+        return losses, summaries
 
 
     def run_test_step(self, tf_session, batch, batch_idx, out_path, export_step=5):
         temperature = 0.5
-        cur_loss, audios, reconstructions = tf_session.run([self.loss, self.audios, self.reconstructions], feed_dict={self.images: batch, self.temperature: temperature})
+        loss, recon_loss, latent_loss, audios, reconstructions = tf_session.run([self.loss, self.vis_model.recon_loss, self.vis_model.latent_loss, self.audios, self.reconstructions], feed_dict={self.images: batch, self.temperature: temperature})
+        losses = {'All': loss, 'MSE': recon_loss, 'KL': latent_loss}
         # save original image and reconstruction
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
             if self.epoch == 1:
                 self.vis_model.save_image(batch[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_orig.png'))
             self.vis_model.save_image(reconstructions[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_recon.png'))
             self.aud_model.save_midi(audios[0], os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_audio.mid'))
-        return cur_loss
+        return losses

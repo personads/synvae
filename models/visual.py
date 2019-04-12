@@ -21,7 +21,7 @@ class VisualVae(BaseModel):
 
 
     def __repr__(self):
-        res  = '<VisualVae: '
+        res  = '<%s: ' % self.__class__.__name__
         res += str(self.images.shape[1:])
         res += ' -> %d (β=%s)' % (self.latent_dim, str(self.beta))
         res += ' -> ' + str(self.reconstructions.shape[1:])
