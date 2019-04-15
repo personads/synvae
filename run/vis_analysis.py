@@ -20,6 +20,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('model_path', help='path to VisualVAE model')
     arg_parser.add_argument('data_path', help='path to data (required for CIFAR)')
     arg_parser.add_argument('out_path', help='path to output')
+    arg_parser.add_argument('--beta', type=float, default=1., help='beta parameter for weighting KL-divergence (default: 1.0)')
     arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size (default: 200)')
     arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default: "1,5,10")')
     arg_parser.add_argument('--num_examples', default=4, help='number of examples for evaluation (default: 4)')
@@ -37,9 +38,9 @@ if __name__ == '__main__':
 
     # set up visual model
     if args.task == 'mnist':
-        model = MnistVae(latent_dim=50, batch_size=args.batch_size)
+        model = MnistVae(latent_dim=50, beta=args.beta, batch_size=args.batch_size)
     elif args.task == 'cifar':
-        model = CifarVae(latent_dim=512, batch_size=args.batch_size)
+        model = CifarVae(latent_dim=512, beta=args.beta, batch_size=args.batch_size)
     model.build()
 
     # load data
@@ -65,6 +66,8 @@ if __name__ == '__main__':
         reconstructions, latents = None, None
         # iterate over batches
         avg_loss = 0.
+        avg_mse = 0.
+        avg_kl = 0.
         batch_idx = 0
         while True:
             try:
@@ -72,8 +75,10 @@ if __name__ == '__main__':
                 sys.stdout.flush()
                 batch = sess.run(next_op)
                 batch_idx += 1
-                cur_loss, cur_recons, cur_latents = sess.run([model.loss, model.reconstructions, model.latents], feed_dict={model.images: batch})
+                cur_loss, cur_mse, cur_kl, cur_recons, cur_latents = sess.run([model.loss, model.recon_loss, model.latent_loss, model.reconstructions, model.latents], feed_dict={model.images: batch})
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
+                avg_mse = ((avg_mse * (batch_idx - 1)) + cur_mse) / batch_idx
+                avg_kl = ((avg_kl * (batch_idx - 1)) + cur_kl) / batch_idx
                 # append to result
                 if (reconstructions is None) or (latents is None):
                     reconstructions, latents = cur_recons, cur_latents
@@ -84,10 +89,11 @@ if __name__ == '__main__':
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch
                 break
-    logging.info("\rEncoded %d batches with avg_loss %.2f, %d reconstructions and %d latent vectors." % (batch_idx, avg_loss, reconstructions.shape[0], latents.shape[0]))
+    logging.info("\rEncoded %d batches with average losses (All: %.2f | MSE: %.2f | KL: %.2f), %d reconstructions and %d latent vectors." % (batch_idx, avg_loss, avg_mse, avg_kl, reconstructions.shape[0], latents.shape[0]))
 
     logging.info("Saving outputs...")
     for idx in range(images.shape[0]):
+        break
         model.save_image(images[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_orig.png'))
         model.save_image(reconstructions[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_recon.png'))
         sys.stdout.write("\rSaved %d/%d (%.2f%%)..." % (idx+1, images.shape[0], ((idx+1)*100)/images.shape[0]))
