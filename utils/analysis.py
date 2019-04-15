@@ -8,6 +8,7 @@ import tensorflow as tf
 import sklearn.manifold.t_sne as tsne
 
 from collections import defaultdict, OrderedDict
+from scipy.spatial.distance import pdist, squareform
 
 
 def calc_sims(latents):
@@ -20,9 +21,7 @@ def calc_sims(latents):
 
 def calc_dists(latents):
     '''Calculate pairwise Euclidean distances'''
-    sum_mat = np.sum(np.square(latents), axis=1)
-    dists = np.add(np.add(-2 * np.dot(latents, latents.T), sum_mat).T, sum_mat)
-    return dists
+    return squareform(pdist(latents, 'euclidean'))
 
 
 def get_closest(centroid, latents):
@@ -167,14 +166,14 @@ def gen_eval_task(mean_latents, latents, num_examples, num_tasks):
     # get triplet of means with largest distance between them
     trio_keys, trio_dists = get_sorted_triplets(mean_latents)
     eval_trio, eval_trio_dist = trio_keys[0], trio_dists[0]
-    print("Calculated mean triplet %s with cumulative Euclidean distance %.2f." % (str(eval_trio), eval_trio_dist))
+    logging.info("Calculated mean triplet %s with cumulative Euclidean distance %.2f." % (str(eval_trio), eval_trio_dist))
     # get samples which lie closest to respective means
     trio_sample_idcs = np.zeros([3, num_examples + num_tasks], dtype=int)
     for tidx in range(3):
         closest_idcs, closest_dists = get_closest(mean_latents[eval_trio[tidx]], latents)
         trio_sample_idcs[tidx] = closest_idcs[:num_examples + num_tasks]
         avg_dist = np.mean(closest_dists[:num_examples + num_tasks])
-        print("Calculated %d samples for mean %d with average distance %.2f." % (trio_sample_idcs[tidx].shape[0], eval_trio[tidx], avg_dist))
+        logging.info("Calculated %d samples for mean %d with average distance %.2f." % (trio_sample_idcs[tidx].shape[0], eval_trio[tidx], avg_dist))
     # get examples
     example_idcs = sorted(np.random.choice((num_examples + num_tasks), num_examples, replace=False))
     examples = np.squeeze(trio_sample_idcs[:,example_idcs].flatten())
