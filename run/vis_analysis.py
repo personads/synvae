@@ -25,6 +25,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default: "1,5,10")')
     arg_parser.add_argument('--num_examples', default=4, help='number of examples for evaluation (default: 4)')
     arg_parser.add_argument('--num_tasks', default=20, help='number of tasks for evaluation (default: 20)')
+    arg_parser.add_argument('--export', action='store_true', help='export original samples and reconstructions')
     args = arg_parser.parse_args()
 
     # check if directory already exists
@@ -91,14 +92,14 @@ if __name__ == '__main__':
                 break
     logging.info("\rEncoded %d batches with average losses (All: %.2f | MSE: %.2f | KL: %.2f), %d reconstructions and %d latent vectors." % (batch_idx, avg_loss, avg_mse, avg_kl, reconstructions.shape[0], latents.shape[0]))
 
-    logging.info("Saving outputs...")
-    for idx in range(images.shape[0]):
-        break
-        model.save_image(images[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_orig.png'))
-        model.save_image(reconstructions[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_recon.png'))
-        sys.stdout.write("\rSaved %d/%d (%.2f%%)..." % (idx+1, images.shape[0], ((idx+1)*100)/images.shape[0]))
-        sys.stdout.flush()
-    logging.info("\rSaved %d images and reconstructions." % images.shape[0])
+    if args.export:
+        logging.info("Saving outputs...")
+        for idx in range(images.shape[0]):
+            model.save_image(images[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_orig.png'))
+            model.save_image(reconstructions[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_recon.png'))
+            sys.stdout.write("\rSaved %d/%d (%.2f%%)..." % (idx+1, images.shape[0], ((idx+1)*100)/images.shape[0]))
+            sys.stdout.flush()
+        logging.info("\rSaved %d images and reconstructions." % images.shape[0])
 
     logging.info("Calculating similarities...")
     sims = calc_dists(latents)
@@ -112,7 +113,7 @@ if __name__ == '__main__':
         log_metrics(label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
 
     logging.info("Exporting evaluation samples...")
-    examples, tasks = gen_eval_task(mean_latents, latents, args.num_examples, args.num_tasks)
+    examples, tasks = gen_eval_task(mean_latents, latents, labels, args.num_examples, args.num_tasks)
     eval_config = OrderedDict([
         ('name', args.task.upper()),
         ('code', ''),

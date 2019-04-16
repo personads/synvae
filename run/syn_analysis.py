@@ -26,6 +26,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size (default: 200)')
     arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default: "1,5,10")')
     arg_parser.add_argument('--perplexity', type=int, default=30, help='perplexity of distributions used to approximate the data space (default: 30)')
+    arg_parser.add_argument('--export', action='store_true', help='export original samples and reconstructions')
     args = arg_parser.parse_args()
 
     # check if directory already exists
@@ -101,14 +102,15 @@ if __name__ == '__main__':
     logging.info("\rEncoded %d batches with avg_loss %.2f, %d audios, %d reconstructions, %d visual latent vectors and %d auditive latent vectors."
         % (batch_idx, avg_loss, audios.shape[0], reconstructions.shape[0], vis_latents.shape[0], aud_latents.shape[0]))
 
-    logging.info("Saving outputs...")
-    for idx in range(images.shape[0]):
-        model.vis_model.save_image(images[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_orig.png'))
-        model.vis_model.save_image(reconstructions[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_recon.png'))
-        model.aud_model.save_midi(audios[idx], os.path.join(args.out_path, str(idx) + '_audio.mid'))
-        sys.stdout.write("\rSaved %d/%d (%.2f%%)..." % (idx+1, images.shape[0], ((idx+1)*100)/images.shape[0]))
-        sys.stdout.flush()
-    logging.info("\rSaved %d images, audios and reconstructions." % images.shape[0])
+    if args.export:
+        logging.info("Saving outputs...")
+        for idx in range(images.shape[0]):
+            model.vis_model.save_image(images[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_orig.png'))
+            model.vis_model.save_image(reconstructions[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_recon.png'))
+            model.aud_model.save_midi(audios[idx], os.path.join(args.out_path, str(idx) + '_audio.mid'))
+            sys.stdout.write("\rSaved %d/%d (%.2f%%)..." % (idx+1, images.shape[0], ((idx+1)*100)/images.shape[0]))
+            sys.stdout.flush()
+        logging.info("\rSaved %d images, audios and reconstructions." % images.shape[0])
 
     logging.info("Calculating similarities...")
     vis_sims = calc_dists(vis_latents)

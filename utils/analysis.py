@@ -162,7 +162,7 @@ def get_sorted_triplets(latents):
     return trio_keys, trio_dists
 
 
-def gen_eval_task(mean_latents, latents, num_examples, num_tasks):
+def gen_eval_task(mean_latents, latents, labels, num_examples, num_tasks):
     # get triplet of means with largest distance between them
     trio_keys, trio_dists = get_sorted_triplets(mean_latents)
     eval_trio, eval_trio_dist = trio_keys[0], trio_dists[0]
@@ -170,7 +170,11 @@ def gen_eval_task(mean_latents, latents, num_examples, num_tasks):
     # get samples which lie closest to respective means
     trio_sample_idcs = np.zeros([3, num_examples + num_tasks], dtype=int)
     for tidx in range(3):
-        closest_idcs, closest_dists = get_closest(mean_latents[eval_trio[tidx]], latents)
+        # get indices of samples with same label as current mean
+        rel_idcs = np.where(labels == (eval_trio[tidx] * np.ones_like(labels)))
+        rel_latents = latents[rel_idcs]
+        # get closest latents of same label per mean
+        closest_idcs, closest_dists = get_closest(mean_latents[eval_trio[tidx]], rel_latents)
         trio_sample_idcs[tidx] = closest_idcs[:num_examples + num_tasks]
         avg_dist = np.mean(closest_dists[:num_examples + num_tasks])
         logging.info("Calculated %d samples for mean %d with average distance %.2f." % (trio_sample_idcs[tidx].shape[0], eval_trio[tidx], avg_dist))
@@ -188,7 +192,7 @@ def gen_eval_task(mean_latents, latents, num_examples, num_tasks):
     for trio in task_trios:
         truth_idx = random.randint(0, 3)
         tasks.append(OrderedDict([
-            ('truth', truth_idx),
-            ('other', trio[:truth_idx] + trio[truth_idx + 1:])
+            ('truth', trio[truth_idx]),
+            ('other', [trio[oidx] for oidx in range(len(trio)) if oidx != truth_idx])
         ]))
     return examples, tasks
