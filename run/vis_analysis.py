@@ -46,8 +46,6 @@ if __name__ == '__main__':
 
     # load data
     images, labels, label_descs, num_labels = load_data(args.task, split='test', data_path=args.data_path)
-    # images = images[:1000]
-    # labels = labels[:1000]
 
     # set up TF datasets
     dataset = tf.data.Dataset.from_tensor_slices(images).batch(args.batch_size)

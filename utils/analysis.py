@@ -32,7 +32,7 @@ def get_closest(centroid, latents):
     dists = list(enumerate(dists))
     dists = sorted(dists, key=lambda el: el[1])
     latent_idcs, dists = zip(*dists)
-    return latent_idcs, dists
+    return np.array(latent_idcs), np.array(dists)
 
 
 def calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='cosine'):
@@ -171,11 +171,11 @@ def gen_eval_task(mean_latents, latents, labels, num_examples, num_tasks):
     trio_sample_idcs = np.zeros([3, num_examples + num_tasks], dtype=int)
     for tidx in range(3):
         # get indices of samples with same label as current mean
-        rel_idcs = np.where(labels == (eval_trio[tidx] * np.ones_like(labels)))
+        rel_idcs = np.squeeze(np.where(labels == (eval_trio[tidx] * np.ones_like(labels))))
         rel_latents = latents[rel_idcs]
         # get closest latents of same label per mean
         closest_idcs, closest_dists = get_closest(mean_latents[eval_trio[tidx]], rel_latents)
-        trio_sample_idcs[tidx] = closest_idcs[:num_examples + num_tasks]
+        trio_sample_idcs[tidx] = rel_idcs[closest_idcs[:num_examples + num_tasks]]
         avg_dist = np.mean(closest_dists[:num_examples + num_tasks])
         logging.info("Calculated %d samples for mean %d with average distance %.2f." % (trio_sample_idcs[tidx].shape[0], eval_trio[tidx], avg_dist))
     # get examples
