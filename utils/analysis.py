@@ -190,7 +190,7 @@ def gen_eval_task(mean_latents, latents, labels, num_examples, num_tasks):
     # randomly select truths for tasks
     tasks = []
     for trio in task_trios:
-        truth_idx = random.randint(0, 3)
+        truth_idx = random.randint(0, 2)
         tasks.append(OrderedDict([
             ('truth', trio[truth_idx]),
             ('other', [trio[oidx] for oidx in range(len(trio)) if oidx != truth_idx])

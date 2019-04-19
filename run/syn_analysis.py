@@ -23,6 +23,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('model_path', help='path to SynVAE model')
     arg_parser.add_argument('data_path', help='path to data (required for CIFAR)')
     arg_parser.add_argument('out_path', help='path to output')
+    arg_parser.add_argument('--beta', type=float, default=1., help='beta parameter for weighting KL-divergence (default: 1.0)')
     arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size (default: 200)')
     arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default: "1,5,10")')
     arg_parser.add_argument('--perplexity', type=int, default=30, help='perplexity of distributions used to approximate the data space (default: 30)')
@@ -42,9 +43,9 @@ if __name__ == '__main__':
     music_vae = MusicVae(config_name=args.musicvae_config, batch_size=args.batch_size)
     # set up visual model
     if args.task == 'mnist':
-        visual_vae = MnistVae(latent_dim=music_vae.latent_dim, batch_size=args.batch_size)
+        visual_vae = MnistVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
     elif args.task == 'cifar':
-        visual_vae = CifarVae(latent_dim=music_vae.latent_dim, batch_size=args.batch_size)
+        visual_vae = CifarVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
     # set up synesthetic model
     model = SynestheticVae(visual_model=visual_vae, auditive_model=music_vae, learning_rate=1e-4)
     model.build()
@@ -68,6 +69,8 @@ if __name__ == '__main__':
         # encode in batches
         audios, reconstructions, vis_latents, aud_latents = None, None, None, None
         avg_loss = 0.
+        avg_mse = 0.
+        avg_kl = 0.
         batch_idx = 0
         # iterate over batches
         while True:
@@ -80,14 +83,16 @@ if __name__ == '__main__':
 
                 # inference step
                 temperature = 0.5
-                cur_loss, cur_audios, cur_recons, cur_vis_latents, cur_aud_latents = sess.run([
-                        model.loss, model.audios, model.reconstructions, model.vis_latents, model.aud_latents
+                cur_loss, cur_mse, cur_kl, cur_audios, cur_recons, cur_vis_latents, cur_aud_latents = sess.run([
+                        model.loss, model.vis_model.recon_loss, model.vis_model.latent_loss, model.audios, model.reconstructions, model.vis_latents, model.aud_latents
                     ], feed_dict={
                         model.images: batch, model.temperature: temperature
                     })
 
                 # append to result
                 avg_loss = ((avg_loss * (batch_idx - 1)) + cur_loss) / batch_idx
+                avg_mse = ((avg_mse * (batch_idx - 1)) + cur_mse) / batch_idx
+                avg_kl = ((avg_kl * (batch_idx - 1)) + cur_kl) / batch_idx
                 if batch_idx == 1:
                     audios, reconstructions, vis_latents, aud_latents = cur_audios, cur_recons, cur_vis_latents, cur_aud_latents
                 else:
@@ -99,8 +104,8 @@ if __name__ == '__main__':
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch
                 break
-    logging.info("\rEncoded %d batches with avg_loss %.2f, %d audios, %d reconstructions, %d visual latent vectors and %d auditive latent vectors."
-        % (batch_idx, avg_loss, audios.shape[0], reconstructions.shape[0], vis_latents.shape[0], aud_latents.shape[0]))
+    logging.info("\rEncoded %d batches with average losses (All: %.2f | MSE: %.2f | KL: %.2f), %d audios, %d reconstructions, %d visual latent vectors and %d auditive latent vectors."
+        % (batch_idx, avg_loss, avg_mse, avg_kl, audios.shape[0], reconstructions.shape[0], vis_latents.shape[0], aud_latents.shape[0]))
 
     if args.export:
         logging.info("Saving outputs...")
