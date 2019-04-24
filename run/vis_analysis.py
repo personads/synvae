@@ -18,7 +18,8 @@ if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(description='VisualVAE - Analysis')
     arg_parser.add_argument('task', choices=['mnist', 'cifar'], help='name of the task (mnist, cifar)')
     arg_parser.add_argument('model_path', help='path to VisualVAE model')
-    arg_parser.add_argument('data_path', help='path to data (required for CIFAR)')
+    arg_parser.add_argument('data_path', help='path to data (not required for original MNIST)')
+    arg_parser.add_argument('data_split', choices=['train', 'test'], default='test', help='data split (train, test (default))')
     arg_parser.add_argument('out_path', help='path to output')
     arg_parser.add_argument('--beta', type=float, default=1., help='beta parameter for weighting KL-divergence (default: 1.0)')
     arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size (default: 200)')
@@ -45,7 +46,7 @@ if __name__ == '__main__':
     model.build()
 
     # load data
-    images, labels, label_descs, num_labels = load_data(args.task, split='test', data_path=args.data_path)
+    images, labels, label_descs, num_labels = load_data(args.task, split=args.data_split, data_path=args.data_path)
 
     # set up TF datasets
     dataset = tf.data.Dataset.from_tensor_slices(images).batch(args.batch_size)
