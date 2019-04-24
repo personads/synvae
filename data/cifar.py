@@ -1,6 +1,5 @@
 import logging, os, pickle
 
-import matplotlib.pyplot as plt
 import numpy as np
 
 class Cifar:
@@ -45,18 +44,3 @@ class Cifar:
         labels = np.array(labels, dtype=int) # convert labels to numpy array
         logging.info("[CIFAR] Loaded %d images from '%s'." % (cifar_dict[b'data'].shape[0], pickle_path))
         return data, labels
-
-
-    def show_image(self, idx):
-        plt.imshow(cifar.data[idx])
-        plt.axis('off')
-        plt.show()
-
-
-if __name__ == '__main__':
-    cifar= CIFAR(r'/mnt/d/thesis/data/cifar10/test', verbose=True)
-    print(cifar.data.shape)
-    # print(cifar.labels.shape)
-    print(type(cifar.labels))
-    print(cifar.label_descs[cifar.labels[1]])
-    cifar.show_image(1)
