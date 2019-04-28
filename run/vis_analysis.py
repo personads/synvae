@@ -112,12 +112,13 @@ if __name__ == '__main__':
         log_metrics(label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
 
     logging.info("Exporting evaluation samples...")
-    examples, tasks = gen_eval_task(mean_latents, latents, labels, args.num_examples, args.num_tasks)
+    classes, examples, tasks = gen_eval_task(mean_latents, latents, labels, args.num_examples, args.num_tasks)
     eval_config = OrderedDict([
         ('name', args.task.upper()),
         ('code', ''),
         ('data_path', ''),
         ('result_path', ''),
+        ('classes', [label_descs[l] for l in classes])
         ('examples', examples),
         ('tasks', tasks)
     ])
