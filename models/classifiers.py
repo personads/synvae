@@ -49,12 +49,12 @@ class VisualCnn(BaseModel):
 
     def run_train_step(self, tf_session, batch):
         _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, self.merge_op], feed_dict={self.images: batch['images'], self.labels: batch['labels']})
-        return cur_loss, summaries
+        return {'All': cur_loss}, summaries
 
 
     def run_test_step(self, tf_session, batch, batch_idx, out_path):
         cur_loss = tf_session.run(self.loss, feed_dict={self.images: batch['images'], self.labels: batch['labels']})
-        return cur_loss
+        return {'All': cur_loss}
 
 
 class CifarCnn(VisualCnn):
