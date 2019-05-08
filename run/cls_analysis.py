@@ -5,9 +5,10 @@ import logging
 
 import tensorflow as tf
 
+from data import *
+from models.classifiers import MnistCnn, CifarCnn
 from utils.analysis import *
 from utils.experiments import *
-from models.classifiers import MnistCnn, CifarCnn
 
 
 if __name__ == '__main__':
@@ -31,16 +32,14 @@ if __name__ == '__main__':
     # set up classifier
     if args.task == 'mnist':
         model = MnistCnn(batch_size=args.batch_size)
+        dataset = Mnist(split='test', data_path=args.data_path)
     elif args.task == 'cifar':
         model = CifarCnn(batch_size=args.batch_size)
+        dataset = Cifar(args.data_path)
     model.build()
 
     # load data
-    images, labels, label_descs, num_labels = load_data(args.task, split='test', data_path=args.data_path)
-
-    # set up TF datasets
-    dataset = tf.data.Dataset.from_tensor_slices({'images': images, 'labels': labels}).batch(args.batch_size)
-    iterator = dataset.make_initializable_iterator()
+    iterator = dataset.get_iterator(batch_size=args.batch_size)
     next_op = iterator.get_next()
 
     # inference
@@ -78,7 +77,7 @@ if __name__ == '__main__':
     total_precision, label_precision, label_recall, label_accuracy = calc_cls_metrics(labels, predictions)
 
     logging.info("Metrics by class:")
-    for label_idx, label in enumerate(label_descs):
+    for label_idx, label in enumerate(dataset.label_descs):
         logging.info("  %s: %.2f Accuracy, %.2f Precision, %.2f Recall." % (
             label, label_accuracy[label_idx],
             label_precision[label_idx],

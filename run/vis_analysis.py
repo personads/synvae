@@ -8,7 +8,7 @@ import tensorflow as tf
 
 from collections import defaultdict, OrderedDict
 
-from data.cifar import Cifar
+from data import *
 from utils.analysis import *
 from utils.experiments import *
 from models.visual import MnistVae, CifarVae
@@ -41,16 +41,14 @@ if __name__ == '__main__':
     # set up visual model
     if args.task == 'mnist':
         model = MnistVae(latent_dim=50, beta=args.beta, batch_size=args.batch_size)
+        dataset = Mnist(split='test', data_path=args.data_path)
     elif args.task == 'cifar':
         model = CifarVae(latent_dim=512, beta=args.beta, batch_size=args.batch_size)
+        dataset = Cifar(args.data_path)
     model.build()
 
     # load data
-    images, labels, label_descs, num_labels = load_data(args.task, split=args.data_split, data_path=args.data_path)
-
-    # set up TF datasets
-    dataset = tf.data.Dataset.from_tensor_slices(images).batch(args.batch_size)
-    iterator = dataset.make_initializable_iterator()
+    iterator = dataset.get_image_iterator(batch_size=args.batch_size)
     next_op = iterator.get_next()
 
     # inference
@@ -107,9 +105,9 @@ if __name__ == '__main__':
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
     logging.info("Calculating metrics...")
-    mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='euclidean')
+    mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(latents, labels, sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
-        log_metrics(label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
+        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
 
     logging.info("Exporting evaluation samples...")
     classes, examples, tasks = gen_eval_task(mean_latents, latents, labels, args.num_examples, args.num_tasks)
@@ -118,7 +116,7 @@ if __name__ == '__main__':
         ('code', ''),
         ('data_path', ''),
         ('result_path', ''),
-        ('classes', [label_descs[l] for l in classes])
+        ('classes', [dataset.label_descs[l] for l in classes])
         ('examples', examples),
         ('tasks', tasks)
     ])

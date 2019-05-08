@@ -8,7 +8,7 @@ import tensorflow as tf
 
 from collections import defaultdict
 
-from data.cifar import Cifar
+from data import *
 from utils.analysis import *
 from utils.experiments import *
 from models.visual import MnistVae, CifarVae
@@ -45,18 +45,16 @@ if __name__ == '__main__':
     # set up visual model
     if args.task == 'mnist':
         visual_vae = MnistVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
+        dataset = Mnist(split='test', data_path=args.data_path)
     elif args.task == 'cifar':
         visual_vae = CifarVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
+        dataset = Cifar(args.data_path)
     # set up synesthetic model
     model = SynestheticVae(visual_model=visual_vae, auditive_model=music_vae, learning_rate=1e-4)
     model.build()
 
     # load data
-    images, labels, label_descs, num_labels = load_data(args.task, split=args.data_split, data_path=args.data_path)
-    
-    # set up TF datasets
-    dataset = tf.data.Dataset.from_tensor_slices(images).batch(args.batch_size)
-    iterator = dataset.make_initializable_iterator()
+    iterator = dataset.get_image_iterator(batch_size=args.batch_size)
     next_op = iterator.get_next()
 
     # inference
@@ -129,11 +127,11 @@ if __name__ == '__main__':
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
     logging.info("Calculating metrics for visual latents...")
-    vis_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(vis_latents, labels, vis_sims, num_labels, prec_ranks, sim_metric='euclidean')
+    vis_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(vis_latents, labels, vis_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
-        log_metrics(label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
+        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
 
     logging.info("Calculating metrics for auditive latents...")
-    aud_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(aud_latents, labels, aud_sims, num_labels, prec_ranks, sim_metric='euclidean')
+    aud_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(aud_latents, labels, aud_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
-        log_metrics(label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
+        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])

@@ -5,8 +5,9 @@ import logging
 
 import tensorflow as tf
 
-from utils.experiments import *
+from data import *
 from models.classifiers import MnistCnn, CifarCnn
+from utils.experiments import *
 
 
 if __name__ == '__main__':
@@ -18,19 +19,14 @@ if __name__ == '__main__':
     # set up classifier
     if args.task == 'mnist':
         model = MnistCnn(batch_size=args.batch_size)
+        dataset = Mnist(split='train', data_path=args.data_path)
     elif args.task == 'cifar':
         model = CifarCnn(batch_size=args.batch_size)
+        dataset = Cifar(args.data_path)
     model.build()
 
     # load data
-    images, labels, label_descs, num_labels = load_data(args.task, split='train', data_path=args.data_path)
-    train_images, train_labels, valid_images, valid_labels = split_data(images, labels, args.task)
-
-    # set up TF datasets
-    train_dataset = tf.data.Dataset.from_tensor_slices({'images': train_images, 'labels': train_labels}).shuffle(train_images.shape[0]).batch(args.batch_size)
-    train_iterator = train_dataset.make_initializable_iterator()
-    valid_dataset = tf.data.Dataset.from_tensor_slices({'images': valid_images, 'labels': valid_labels}).batch(args.batch_size)
-    valid_iterator = valid_dataset.make_initializable_iterator()
+    train_iterator, valid_iterator = dataset.get_train_iterators(batch_size=args.batch_size)
 
     epochs = args.epochs
     with tf.Session() as sess:

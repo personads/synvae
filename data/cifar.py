@@ -2,7 +2,9 @@ import logging, os, pickle
 
 import numpy as np
 
-class Cifar:
+from data.dataset import Dataset
+
+class Cifar(Dataset):
     '''CIFAR Dataloader'''
     def __init__(self, cifar_dir):
         self.data, self.labels = self._load_cifar_directory(cifar_dir)
@@ -44,3 +46,11 @@ class Cifar:
         labels = np.array(labels, dtype=int) # convert labels to numpy array
         logging.info("[CIFAR] Loaded %d images from '%s'." % (cifar_dict[b'data'].shape[0], pickle_path))
         return data, labels
+
+
+    def split_train_data(self):
+        split_idx = int(self.data.shape[0]*.8)
+        train_images, train_labels = self.data[:split_idx], self.labels[:split_idx]
+        valid_images, valid_labels = self.data[split_idx:], self.labels[split_idx:]
+        logging.info("[CIFAR] Split data into %d training and %d validation images." % (train_images.shape[0], valid_images.shape[0]))
+        return train_images, train_labels, valid_images, valid_labels

@@ -6,6 +6,7 @@ import logging
 import numpy as np
 import tensorflow as tf
 
+from data import *
 from models.visual import *
 
 from utils.experiments import *
@@ -20,19 +21,14 @@ if __name__ == '__main__':
     # set up visual model
     if args.task == 'mnist':
         model = MnistVae(latent_dim=50, beta=args.beta, batch_size=args.batch_size)
+        dataset = Mnist(split='train', data_path=args.data_path)
     elif args.task == 'cifar':
         model = CifarVae(latent_dim=512, beta=args.beta, batch_size=args.batch_size)
+        dataset = Cifar(args.data_path)
     model.build()
 
     # load data
-    images, labels, label_descs, num_labels = load_data(args.task, split='train', data_path=args.data_path)
-    train_images, _, valid_images, _ = split_data(images, labels, args.task)
-
-    # set up TF datasets
-    train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(train_images.shape[0]).batch(args.batch_size)
-    train_iterator = train_dataset.make_initializable_iterator()
-    valid_dataset = tf.data.Dataset.from_tensor_slices(valid_images).batch(args.batch_size)
-    valid_iterator = valid_dataset.make_initializable_iterator()
+    train_iterator, valid_iterator = dataset.get_train_image_iterators(batch_size=args.batch_size)
 
     epochs = args.epochs
     with tf.Session() as sess:
