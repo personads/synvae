@@ -10,6 +10,7 @@ class Bam(Dataset):
     def __init__(self, data_path):
         # init internal variables
         self.data = [os.path.join(data_path, 'img/', cur_path) for cur_path in os.listdir(os.path.join(data_path, 'img/'))]
+        self.data.sort(key=lambda el: int(os.path.splitext(os.path.basename(el))[0])) #sort by MID
         self.labels = np.load(os.path.join(data_path, 'labels.npy'))
         self.label_descs = [
             'content_bicycle', 'content_bird', 'content_building', 'content_cars', 'content_cat', 'content_dog', 'content_flower', 'content_people', 'content_tree',
