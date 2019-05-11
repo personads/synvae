@@ -25,6 +25,9 @@ if __name__ == '__main__':
     elif args.task == 'cifar':
         model = CifarVae(latent_dim=512, beta=args.beta, batch_size=args.batch_size)
         dataset = Cifar(args.data_path)
+    elif args.task == 'bam':
+        model = BamVae(latent_dim=512, beta=args.beta, batch_size=args.batch_size)
+        dataset = Bam(args.data_path)
     model.build()
 
     # load data

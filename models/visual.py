@@ -88,6 +88,44 @@ class VisualVae(BaseModel):
         return losses
 
 
+class BamVae(VisualVae):
+    def __init__(self, latent_dim, beta, batch_size):
+        super().__init__(img_height=256, img_width=256, img_depth=3, latent_dim=latent_dim, beta=beta, batch_size=batch_size, learning_rate=1e-3)
+
+
+    def build_encoder(self, images):
+        inputs = tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth))(images)
+        conv1 = tf.keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(inputs)
+        conv2 = tf.keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv1)
+        conv3 = tf.keras.layers.Conv2D(filters=256, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv2)
+        conv4 = tf.keras.layers.Conv2D(filters=256, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv3)
+        conv5 = tf.keras.layers.Conv2D(filters=512, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv4)
+        conv6 = tf.keras.layers.Conv2D(filters=512, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv5)
+        conv7 = tf.keras.layers.Conv2D(filters=1024, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv6)
+        flat = tf.keras.layers.Flatten()(conv7)
+        dense = tf.keras.layers.Dense(units=(self.img_width//128 * self.img_height//128 * 1024), activation=tf.nn.relu)(flat)
+        means = tf.keras.layers.Dense(self.latent_dim)(flat)
+        sigmas = tf.keras.layers.Dense(self.latent_dim)(flat)
+        epsilons = tf.random.normal((self.batch_size, self.latent_dim), mean=0., stddev=1.)
+        latents = means + tf.exp(.5 * sigmas) * epsilons
+        return latents, means, sigmas
+
+
+    def build_decoder(self, latents):
+        inputs = tf.keras.layers.InputLayer(input_shape=(self.latent_dim,))(latents)
+        dense1 = tf.keras.layers.Dense(units=(self.img_width//128 * self.img_height//128 * 1024), activation=tf.nn.relu)(inputs)
+        shape = tf.keras.layers.Reshape(target_shape=(self.img_width//128, self.img_height//128, 1024))(dense1)
+        deconv1 = tf.keras.layers.Conv2DTranspose(filters=1024, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(shape)
+        deconv2 = tf.keras.layers.Conv2DTranspose(filters=512, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv1)
+        deconv3 = tf.keras.layers.Conv2DTranspose(filters=512, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv2)
+        deconv4 = tf.keras.layers.Conv2DTranspose(filters=256, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv3)
+        deconv5 = tf.keras.layers.Conv2DTranspose(filters=256, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv4)
+        deconv6 = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv5)
+        deconv7 = tf.keras.layers.Conv2DTranspose(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(deconv6)
+        recons = tf.keras.layers.Conv2DTranspose(filters=self.img_depth, kernel_size=1, strides=1, padding='same', activation=tf.nn.sigmoid)(deconv7)
+        return recons
+
+
 class CifarVae(VisualVae):
     def __init__(self, latent_dim, beta, batch_size):
         super().__init__(img_height=32, img_width=32, img_depth=3, latent_dim=latent_dim, beta=beta, batch_size=batch_size, learning_rate=1e-3)

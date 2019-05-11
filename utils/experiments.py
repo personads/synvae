@@ -7,7 +7,7 @@ from data import *
 
 def parse_arguments(exp_name):
     arg_parser = argparse.ArgumentParser(description=exp_name)
-    arg_parser.add_argument('task', choices=['mnist', 'cifar'], help='name of the task (mnist, cifar)')
+    arg_parser.add_argument('task', choices=['mnist', 'cifar','bam'], help='name of the task (mnist, cifar, bam)')
     arg_parser.add_argument('exp_path', help='path to experiment files (model checkpoints, TensorBoard logs, model outputs)')
     arg_parser.add_argument('data_path', help='path to data (not required for original MNIST)')
     arg_parser.add_argument('--beta', type=float, default=1., help='beta parameter for weighting KL-divergence (default: 1.0)')
