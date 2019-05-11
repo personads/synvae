@@ -28,7 +28,7 @@ if __name__ == '__main__':
     latents = np.load(args.latent_path)
     print("Loaded %d latents with dimensionality %d." % (latents.shape[0], latents.shape[1]))
 
-    tSNE
+    # tSNE
     tsne_model = TSNE(n_components=2, verbose=True)
     tsne_latents = tsne_model.fit_transform(latents)
 
@@ -37,19 +37,15 @@ if __name__ == '__main__':
     tsne_path = os.path.join(args.out_path, '%s_tsne%s' % (latents_name, latents_ext))
     np.save(tsne_path, tsne_latents)
     print("Saved tSNE latents to '%s'." % tsne_path)
-    # tsne_latents = np.load('/mnt/d/thesis/exp/tsne_plot/mnist_vae_01_latents_tsne.npy')
 
     # create subset
     if len(args.eval_task) > 0:
         eval_task = json.load(open(args.eval_task, 'r', encoding='utf8'))
-        subset_idcs = eval_task['examples']
-        for task in eval_task['tasks']:
-            subset_idcs += task['options']
-        subset_idcs = np.array(subset_idcs)
-        cls_idx_map = [label_descs.index(d) for d in eval_task['classes']]
-        label_descs = eval_task['classes']
-        num_labels = len(label_descs)
-        print("Loaded %d data points from eval task '%s'." % (len(subset_idcs), args.eval_task))
+        eval_idcs = eval_task['examples'] + [i for task in eval_task['tasks'] for i in task['options']]
+        other_idcs = [i for i in range(tsne_latents.shape[0]) if i not in eval_idcs]
+        other_idcs = np.random.choice(other_idcs, args.num_points - len(eval_idcs), replace=False)
+        subset_idcs = np.concatenate((other_idcs, eval_idcs))
+        print("Loaded %d data points from eval task '%s'." % (len(eval_idcs), args.eval_task))
     else:
         subset_idcs = np.random.choice(tsne_latents.shape[0], args.num_points, replace=False)
         print("Reduced data points to random subset of size %d." % args.num_points)
@@ -71,19 +67,32 @@ if __name__ == '__main__':
         alphas[lbl_idcs] = np.clip(dists * (1 / max_dist), .3, None)
 
     fig, ax = plt.subplots()
-    ax.scatter(tsne_latents[:, 0], tsne_latents[:, 1], alpha=0.)
+    ax.scatter(tsne_latents[:, 0], tsne_latents[:, 1], alpha=0., zorder=1)
     ax.get_xaxis().set_visible(False)
     ax.get_yaxis().set_visible(False)
 
     # plot data points
     for i in range(tsne_latents.shape[0]):
         img = images[subset_idcs[i]].squeeze()
-        ab = AnnotationBbox(OffsetImage(img, zoom=.5, cmap='gray', alpha=alphas[i]), (tsne_latents[i][0], tsne_latents[i][1]), frameon=False)
+        if (len(args.eval_task) > 0) and (subset_idcs[i] in eval_idcs):
+            bboxprops = dict(lw=2., ec='coral', alpha=.7)
+            ab = AnnotationBbox(OffsetImage(img, zoom=.5, cmap='gray', alpha=.8), (tsne_latents[i][0], tsne_latents[i][1]), pad=0., bboxprops=bboxprops)
+        else:
+            ab = AnnotationBbox(OffsetImage(img, zoom=.5, cmap='gray', alpha=alphas[i]), (tsne_latents[i][0], tsne_latents[i][1]), pad=0., frameon=False)
         ax.add_artist(ab)
     # plot means
     for c in range(len(label_descs)):
-        bboxprops = dict(boxstyle='circle,pad=0.5', fc='black', ec='white')
-        ax.text(mean_latents[c][0], mean_latents[c][1], label_descs[c], ha='center', color='white', fontweight='bold', size=8, alpha=.75, zorder=5, bbox=bboxprops)
+        color = 'white'
+        if (len(args.eval_task) > 0) and (label_descs[c] in eval_task['classes']):
+            color = 'coral'
+        bboxprops = dict(boxstyle='circle,pad=0.5', fc='black', ec=color)
+        ax.text(mean_latents[c][0], mean_latents[c][1], label_descs[c], ha='center', color=color, fontweight='bold', size=8, alpha=.75, zorder=5, bbox=bboxprops)
+    # plot mean connections (for eval)
+    if len(args.eval_task) > 0:
+        eval_mean_xs = [mean_latents[label_descs.index(eval_task['classes'][i%len(eval_task['classes'])])][0] for i in range(len(eval_task['classes'])+1)]
+        eval_mean_ys = [mean_latents[label_descs.index(eval_task['classes'][i%len(eval_task['classes'])])][1] for i in range(len(eval_task['classes'])+1)]
+        ax.plot(eval_mean_xs, eval_mean_ys, color='coral', alpha=.8, zorder=4)
+
 
     fig.savefig(os.path.join(args.out_path, 'tsne.pdf'))
     plt.show()
