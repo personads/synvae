@@ -19,9 +19,21 @@ class Bam(Dataset):
         logging.info("[BAM] Found %d images in '%s'." % (len(self.data), data_path))
 
 
-    def _load_image(self, path):
+    def _load_train_image(self, path):
         image = tf.read_file(path)
         image = tf.cast(tf.image.decode_jpeg(image, channels=3), dtype=tf.float32)
+        min_dim = min(image.shape[:-1])
+        image = tf.image.random_crop(image, [min_dim, min_dim])
+        image /= 255.0
+        return image
+
+
+    def _load_test_image(self, path):
+        image = tf.read_file(path)
+        image = tf.cast(tf.image.decode_jpeg(image, channels=3), dtype=tf.float32)
+        min_dim = min(image.shape[:-1])
+        # crop to centre
+        image = tf.image.crop_to_bounding_box(image, (image.shape[0] - min_dim)/2, (image.shape[1] - min_dim)/2, min_dim, min_dim)
         image /= 255.0
         return image
 
@@ -38,12 +50,12 @@ class Bam(Dataset):
         train_images, _, valid_images, _ = self.split_train_data()
         # construct training dataset
         train_paths = tf.data.Dataset.from_tensor_slices(train_images)
-        train_dataset = train_paths.map(self._load_image, num_parallel_calls=multiprocessing.cpu_count())
+        train_dataset = train_paths.map(self._load_train_image, num_parallel_calls=multiprocessing.cpu_count())
         train_dataset = train_dataset.shuffle(buffer_size).batch(batch_size, drop_remainder=True)
         train_iterator = train_dataset.make_initializable_iterator()
         # construct validation dataset
         valid_paths = tf.data.Dataset.from_tensor_slices(valid_images)
-        valid_dataset = valid_paths.map(self._load_image, num_parallel_calls=multiprocessing.cpu_count())
+        valid_dataset = valid_paths.map(self._load_test_image, num_parallel_calls=multiprocessing.cpu_count())
         valid_dataset = valid_dataset.batch(batch_size, drop_remainder=True)
         valid_iterator = valid_dataset.make_initializable_iterator()
         return train_iterator, valid_iterator
