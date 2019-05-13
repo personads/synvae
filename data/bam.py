@@ -19,7 +19,7 @@ class Bam(Dataset):
         logging.info("[BAM] Found %d images in '%s'." % (len(self.data), data_path))
 
 
-    def _load_image(path):
+    def _load_image(self, path):
         image = tf.read_file(path)
         image = tf.cast(tf.image.decode_jpeg(image, channels=3), dtype=tf.float32)
         image /= 255.0
@@ -30,20 +30,20 @@ class Bam(Dataset):
         split_idx = int(len(self.data)*.8)
         train_images, train_labels = self.data[:split_idx], self.labels[:split_idx]
         valid_images, valid_labels = self.data[split_idx:], self.labels[split_idx:]
-        logging.info("[MNIST] Split data into %d training and %d validation images." % (train_images.shape[0], valid_images.shape[0]))
+        logging.info("[BAM] Split data into %d training and %d validation images." % (len(train_images), len(valid_images)))
         return train_images, train_labels, valid_images, valid_labels
 
 
-    def get_train_image_iterators(self, batch_size, buffer_size=3*1e4):
+    def get_train_image_iterators(self, batch_size, buffer_size=1000):
         train_images, _, valid_images, _ = self.split_train_data()
         # construct training dataset
         train_paths = tf.data.Dataset.from_tensor_slices(train_images)
         train_dataset = train_paths.map(self._load_image, num_parallel_calls=multiprocessing.cpu_count())
-        train_dataset = train_dataset.shuffle(buffer_size).batch(batch_size)
+        train_dataset = train_dataset.shuffle(buffer_size).batch(batch_size, drop_remainder=True)
         train_iterator = train_dataset.make_initializable_iterator()
         # construct validation dataset
         valid_paths = tf.data.Dataset.from_tensor_slices(valid_images)
         valid_dataset = valid_paths.map(self._load_image, num_parallel_calls=multiprocessing.cpu_count())
-        valid_dataset = valid_dataset.batch(batch_size)
+        valid_dataset = valid_dataset.batch(batch_size, drop_remainder=True)
         valid_iterator = valid_dataset.make_initializable_iterator()
         return train_iterator, valid_iterator

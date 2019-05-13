@@ -27,7 +27,7 @@ class BaseModel:
         pass
 
 
-    def train(self, tf_session, train_iter, valid_iter, max_epochs, model_path, out_path, tf_writer):
+    def train(self, tf_session, train_iter, valid_iter, max_epochs, model_path, out_path, tf_writer=None):
         # set up training specific ops
         self.merge_op = tf.summary.merge_all()
         next_op = train_iter.get_next()
@@ -56,7 +56,7 @@ class BaseModel:
                     # exit batch loop and proceed to next epoch
                     break
             # write epoch summary
-            tf_writer.add_summary(cur_summaries, self.epoch)
+            if tf_writer: tf_writer.add_summary(cur_summaries, self.epoch)
             logging.info("\r[%s] Completed epoch %d/%d (%d batches). Average losses (%s).%s" % (self.__class__.__name__, self.epoch, max_epochs, batch_idx, avg_losses_str, ' '*len(cur_losses_str)))
 
             # check performance on test split

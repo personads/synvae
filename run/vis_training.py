@@ -37,7 +37,5 @@ if __name__ == '__main__':
     with tf.Session() as sess:
         # initialize variables
         sess.run(tf.global_variables_initializer())
-        # set up TensorBoard writer
-        tf_writer = tf.summary.FileWriter(tb_path, graph=sess.graph)
         # training loop
-        model.train(sess, train_iterator, valid_iterator, epochs, model_path, out_path, tf_writer)
+        model.train(sess, train_iterator, valid_iterator, epochs, model_path, out_path)
