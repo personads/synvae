@@ -22,8 +22,7 @@ class Bam(Dataset):
     def _load_train_image(self, path):
         image = tf.read_file(path)
         image = tf.cast(tf.image.decode_jpeg(image, channels=3), dtype=tf.float32)
-        min_dim = min(image.shape[:-1])
-        image = tf.image.random_crop(image, [min_dim, min_dim])
+        image = tf.image.random_crop(image, [256, 256, 3])
         image /= 255.0
         return image
 
@@ -31,9 +30,10 @@ class Bam(Dataset):
     def _load_test_image(self, path):
         image = tf.read_file(path)
         image = tf.cast(tf.image.decode_jpeg(image, channels=3), dtype=tf.float32)
-        min_dim = min(image.shape[:-1])
         # crop to centre
-        image = tf.image.crop_to_bounding_box(image, (image.shape[0] - min_dim)/2, (image.shape[1] - min_dim)/2, min_dim, min_dim)
+        height, width = tf.shape(image)[0], tf.shape(image)[1]
+        min_size = tf.minimum(height, width)
+        image = tf.image.crop_to_bounding_box(image, (height - min_size)//2, (width - min_size)//2, 256, 256)
         image /= 255.0
         return image
 
