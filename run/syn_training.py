@@ -50,7 +50,5 @@ if __name__ == '__main__':
         # restore visual model (if provided)
         if len(args.visvae_path) > 0:
             model.restore_visual(tf_session=sess, path=args.visvae_path)
-        # set up TensorBoard writer
-        tf_writer = tf.summary.FileWriter(tb_path, graph=sess.graph)
         # training loop
-        model.train(sess, train_iterator, valid_iterator, epochs, model_path, out_path, tf_writer)
+        model.train(sess, train_iterator, valid_iterator, epochs, model_path, out_path)
