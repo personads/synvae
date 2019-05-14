@@ -28,15 +28,16 @@ if __name__ == '__main__':
     latents = np.load(args.latent_path)
     print("Loaded %d latents with dimensionality %d." % (latents.shape[0], latents.shape[1]))
 
-    # tSNE
-    tsne_model = TSNE(n_components=2, verbose=True)
-    tsne_latents = tsne_model.fit_transform(latents)
+    # # tSNE
+    # tsne_model = TSNE(n_components=2, verbose=True)
+    # tsne_latents = tsne_model.fit_transform(latents)
 
-    # save transformation
-    latents_name, latents_ext = os.path.splitext(os.path.basename(args.latent_path))
-    tsne_path = os.path.join(args.out_path, '%s_tsne%s' % (latents_name, latents_ext))
-    np.save(tsne_path, tsne_latents)
-    print("Saved tSNE latents to '%s'." % tsne_path)
+    # # save transformation
+    # latents_name, latents_ext = os.path.splitext(os.path.basename(args.latent_path))
+    # tsne_path = os.path.join(args.out_path, '%s_tsne%s' % (latents_name, latents_ext))
+    # np.save(tsne_path, tsne_latents)
+    # print("Saved tSNE latents to '%s'." % tsne_path)
+    tsne_latents = np.load('/mnt/d/thesis/exp/tsne_plot/mnist_vae_01_latents_tsne_rnd.npy')
 
     # create subset
     if len(args.eval_task) > 0:
@@ -93,6 +94,6 @@ if __name__ == '__main__':
         eval_mean_ys = [mean_latents[label_descs.index(eval_task['classes'][i%len(eval_task['classes'])])][1] for i in range(len(eval_task['classes'])+1)]
         ax.plot(eval_mean_xs, eval_mean_ys, color='coral', alpha=.8, zorder=4)
 
-
+    fig.tight_layout()
     fig.savefig(os.path.join(args.out_path, 'tsne.pdf'))
     plt.show()
