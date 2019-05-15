@@ -37,5 +37,9 @@ if __name__ == '__main__':
     with tf.Session() as sess:
         # initialize variables
         sess.run(tf.global_variables_initializer())
+        # restore model when resuming training
+        if args.init_epoch > 0:
+            model.restore(tf_session=sess, path=os.path.join(model_path, 'latest_model.ckpt'))
+            model.epoch = args.init_epoch - 1
         # training loop
         model.train(sess, train_iterator, valid_iterator, epochs, model_path, out_path)

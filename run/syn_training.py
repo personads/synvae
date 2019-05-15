@@ -16,7 +16,7 @@ from utils.experiments import *
 if __name__ == '__main__':
     arg_parser = parse_arguments('SynestheticVAE - Training')
     arg_parser.add_argument('visvae_path', help='path to pre-trained VisualVAE (not required if training from scratch)')
-    arg_parser.add_argument('musicvae_config', help='name of the MusicVAE model configuration (e.g. hierdec-mel_16bar)')
+    arg_parser.add_argument('musicvae_config', choices=['cat-mel_2bar_big', 'hierdec-mel_16bar'], help='name of the MusicVAE model configuration (e.g. hierdec-mel_16bar)')
     arg_parser.add_argument('musicvae_path', help='path to MusicVAE model checkpoints')
     args = arg_parser.parse_args()
     model_path, tb_path, out_path, log_path = make_experiment_dir(args.exp_path)
@@ -45,10 +45,16 @@ if __name__ == '__main__':
     with tf.Session() as sess:
         # initialize variables
         sess.run(tf.global_variables_initializer())
-        # restore MusicVAE
-        model.restore_auditive(tf_session=sess, path=args.musicvae_path)
-        # restore visual model (if provided)
-        if len(args.visvae_path) > 0:
-            model.restore_visual(tf_session=sess, path=args.visvae_path)
+        # restore full model when resuming training
+        if args.init_epoch > 0:
+            model.restore(tf_session=sess, path=os.path.join(model_path, 'latest_model.ckpt'))
+            model.epoch = args.init_epoch - 1
+        # restore separate models otherwise
+        else:
+            # restore MusicVAE
+            model.restore_auditive(tf_session=sess, path=args.musicvae_path)
+            # restore visual model (if provided)
+            if len(args.visvae_path) > 0:
+                model.restore_visual(tf_session=sess, path=args.visvae_path)
         # training loop
         model.train(sess, train_iterator, valid_iterator, epochs, model_path, out_path)

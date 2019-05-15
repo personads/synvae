@@ -12,6 +12,7 @@ def parse_arguments(exp_name):
     arg_parser.add_argument('data_path', help='path to data (not required for original MNIST)')
     arg_parser.add_argument('--beta', type=float, default=1., help='beta parameter for weighting KL-divergence (default: 1.0)')
     arg_parser.add_argument('--epochs', type=int, default=100, help='number of training epochs (default: 100)')
+    arg_parser.add_argument('--init_epoch', type=int, default=0, help='epoch to resume at (default: 0)')
     arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size for training and evaluation (default: 200)')
     return arg_parser
 
@@ -19,16 +20,16 @@ def parse_arguments(exp_name):
 def make_experiment_dir(path):
     # check if directory already exists
     if os.path.exists(path):
-        print("[Error] '%s' already exists." % (path,))
-        sys.exit()
+        print("[Warning] '%s' already exists." % (path,))
     # make necessary directories
-    os.mkdir(path)
+    else:
+        os.mkdir(path)
     checkpoints_path = os.path.join(path, 'checkpoints')
-    os.mkdir(checkpoints_path)
+    if not os.path.exists(checkpoints_path): os.mkdir(checkpoints_path)
     tensorboard_path = os.path.join(path, 'tensorboard')
-    os.mkdir(tensorboard_path)
+    if not os.path.exists(tensorboard_path): os.mkdir(tensorboard_path)
     output_path = os.path.join(path, 'output')
-    os.mkdir(output_path)
+    if not os.path.exists(output_path): os.mkdir(output_path)
     # make necessary paths
     log_path = os.path.join(path, 'experiment.log')
     return checkpoints_path, tensorboard_path, output_path, log_path
