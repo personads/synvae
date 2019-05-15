@@ -32,7 +32,7 @@ if __name__ == '__main__':
         vis_model = CifarVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
         dataset = Cifar(args.data_path)
     elif args.task == 'bam':
-        model = BamVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
+        vis_model = BamVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
         dataset = Bam(args.data_path)
     # set up synesthetic model
     model = SynestheticVae(visual_model=vis_model, auditive_model=music_vae, learning_rate=1e-3)
