@@ -398,6 +398,68 @@ CONFIG_MAP['hier-mel_16bar'] = Config(
     eval_examples_path=None,
 )
 
+# custom shorter melodic models based on 16-bar
+
+mel_8bar_converter = data.OneHotMelodyConverter(
+    skip_polyphony=False,
+    max_bars=100,  # Truncate long melodies before slicing.
+    slice_bars=8,
+    steps_per_quarter=4)
+
+CONFIG_MAP['hierdec-mel_8bar'] = Config(
+    model=MusicVAE(
+        lstm_models.BidirectionalLstmEncoder(),
+        lstm_models.HierarchicalLstmDecoder(
+            lstm_models.CategoricalLstmDecoder(),
+            level_lengths=[8, 16],
+            disable_autoregression=True)),
+    hparams=merge_hparams(
+        lstm_models.get_default_hparams(),
+        HParams(
+            batch_size=512,
+            max_seq_len=128,
+            z_size=512,
+            enc_rnn_size=[2048, 2048],
+            dec_rnn_size=[1024, 1024],
+            free_bits=256,
+            max_beta=0.2,
+        )),
+    note_sequence_augmenter=None,
+    data_converter=mel_8bar_converter,
+    train_examples_path=None,
+    eval_examples_path=None,
+)
+
+mel_4bar_converter = data.OneHotMelodyConverter(
+    skip_polyphony=False,
+    max_bars=100,  # Truncate long melodies before slicing.
+    slice_bars=4,
+    steps_per_quarter=4)
+
+CONFIG_MAP['hierdec-mel_4bar'] = Config(
+    model=MusicVAE(
+        lstm_models.BidirectionalLstmEncoder(),
+        lstm_models.HierarchicalLstmDecoder(
+            lstm_models.CategoricalLstmDecoder(),
+            level_lengths=[4, 16],
+            disable_autoregression=True)),
+    hparams=merge_hparams(
+        lstm_models.get_default_hparams(),
+        HParams(
+            batch_size=512,
+            max_seq_len=64,
+            z_size=512,
+            enc_rnn_size=[2048, 2048],
+            dec_rnn_size=[1024, 1024],
+            free_bits=256,
+            max_beta=0.2,
+        )),
+    note_sequence_augmenter=None,
+    data_converter=mel_4bar_converter,
+    train_examples_path=None,
+    eval_examples_path=None,
+)
+
 # Multitrack
 multiperf_encoder = lstm_models.HierarchicalLstmEncoder(
     lstm_models.BidirectionalLstmEncoder,
