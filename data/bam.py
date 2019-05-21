@@ -46,6 +46,14 @@ class Bam(Dataset):
         return train_images, train_labels, valid_images, valid_labels
 
 
+    def get_image_iterator(self, batch_size):
+        paths = tf.data.Dataset.from_tensor_slices(self.data)
+        dataset = paths.map(self._load_test_image, num_parallel_calls=multiprocessing.cpu_count())
+        dataset = dataset.batch(batch_size, drop_remainder=True)
+        iterator = dataset.make_initializable_iterator()
+        return iterator
+
+
     def get_train_image_iterators(self, batch_size, buffer_size=1000):
         train_images, _, valid_images, _ = self.split_train_data()
         # construct training dataset

@@ -18,8 +18,8 @@ from models.synesthetic import SynestheticVae
 
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(description='SynVAE - Analysis')
-    arg_parser.add_argument('task', choices=['mnist', 'cifar'], help='name of the task (mnist, cifar)')
-    arg_parser.add_argument('musicvae_config', choices=['cat-mel_2bar_big', 'hierdec-mel_16bar'], help='name of the MusicVAE model configuration (e.g. hierdec-mel_16bar)')
+    arg_parser.add_argument('task', choices=['mnist', 'cifar', 'bam'], help='name of the task (mnist, cifar, bam)')
+    arg_parser.add_argument('musicvae_config', choices=['cat-mel_2bar_big', 'hierdec-mel_4bar', 'hierdec-mel_8bar' 'hierdec-mel_16bar'], help='name of the MusicVAE model configuration (e.g. hierdec-mel_16bar)')
     arg_parser.add_argument('model_path', help='path to SynVAE model')
     arg_parser.add_argument('data_path', help='path to data (not required for original MNIST)')
     arg_parser.add_argument('data_split', choices=['train', 'test'], default='test', help='data split (train, test (default))')
@@ -27,6 +27,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('--beta', type=float, default=1., help='beta parameter for weighting KL-divergence (default: 1.0)')
     arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size (default: 200)')
     arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default: "1,5,10")')
+    arg_parser.add_argument('--kl', action='store_true', help='compute approximate audio-visual KL-divergence')
     arg_parser.add_argument('--perplexity', type=int, default=30, help='perplexity of distributions used to approximate the data space (default: 30)')
     arg_parser.add_argument('--export', action='store_true', help='export original samples and reconstructions')
     args = arg_parser.parse_args()
@@ -49,6 +50,9 @@ if __name__ == '__main__':
     elif args.task == 'cifar':
         visual_vae = CifarVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
         dataset = Cifar(args.data_path)
+    elif args.task == 'bam':
+        visual_vae = BamVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
+        dataset = Bam(args.data_path)
     # set up synesthetic model
     model = SynestheticVae(visual_model=visual_vae, auditive_model=music_vae, learning_rate=1e-4)
     model.build()
@@ -116,12 +120,13 @@ if __name__ == '__main__':
             sys.stdout.flush()
         logging.info("\rSaved %d images, audios and reconstructions." % images.shape[0])
 
+    if args.kl:
+        logging.info("Calculating KL divergence between latents (perplexity: %d)..." % args.perplexity)
+        kl = calc_latent_kl(vis_latents, aud_latents, perplexity=args.perplexity)
+
     logging.info("Calculating similarities...")
     vis_sims = calc_dists(vis_latents)
     aud_sims = calc_dists(aud_latents)
-
-    logging.info("Calculating KL divergence between latents (perplexity: %d)..." % args.perplexity)
-    kl = calc_latent_kl(vis_latents, aud_latents, perplexity=args.perplexity)
 
     # parse precision ranks
     prec_ranks = [int(r) for r in args.ranks.split(',')]

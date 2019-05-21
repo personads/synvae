@@ -27,16 +27,16 @@ if __name__ == '__main__':
     music_vae = MusicVae(config_name=args.musicvae_config, batch_size=args.batch_size)
     # set up visual model
     if args.task == 'mnist':
-        vis_model = MnistVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
+        visual_vae = MnistVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
         dataset = Mnist(split='train', data_path=args.data_path)
     elif args.task == 'cifar':
-        vis_model = CifarVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
+        visual_vae = CifarVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
         dataset = Cifar(args.data_path)
     elif args.task == 'bam':
-        vis_model = BamVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
+        visual_vae = BamVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
         dataset = Bam(args.data_path)
     # set up synesthetic model
-    model = SynestheticVae(visual_model=vis_model, auditive_model=music_vae, learning_rate=1e-3)
+    model = SynestheticVae(visual_model=visual_vae, auditive_model=music_vae, learning_rate=1e-3)
     model.build()
 
     # set export step
