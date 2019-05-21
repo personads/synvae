@@ -13,6 +13,7 @@ class SynestheticVae(BaseModel):
         self.latent_dim = self.aud_model.latent_dim
         self.learning_rate = learning_rate
         self.epoch = 0
+        self.export_step = 5
         # set up computation graph placeholders
         self.images = self.vis_model.images
         self.temperature = self.aud_model.temperature
@@ -110,12 +111,12 @@ class SynestheticVae(BaseModel):
         return losses, summaries
 
 
-    def run_test_step(self, tf_session, batch, batch_idx, out_path, export_step=5):
+    def run_test_step(self, tf_session, batch, batch_idx, out_path):
         temperature = 0.5
         loss, recon_loss, latent_loss, audios, reconstructions = tf_session.run([self.loss, self.vis_model.recon_loss, self.vis_model.latent_loss, self.audios, self.reconstructions], feed_dict={self.images: batch, self.temperature: temperature})
         losses = {'All': loss, 'MSE': recon_loss, 'KL': latent_loss}
         # save original image and reconstruction
-        if (export_step > 0) and ((batch_idx-1) % export_step == 0):
+        if (self.export_step > 0) and ((batch_idx-1) % self.export_step == 0):
             if self.epoch == 1:
                 self.vis_model.save_image(batch[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_orig.png'))
             self.vis_model.save_image(reconstructions[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_recon.png'))

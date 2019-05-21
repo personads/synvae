@@ -16,8 +16,9 @@ from utils.experiments import *
 if __name__ == '__main__':
     arg_parser = parse_arguments('SynestheticVAE - Training')
     arg_parser.add_argument('visvae_path', help='path to pre-trained VisualVAE (not required if training from scratch)')
-    arg_parser.add_argument('musicvae_config', choices=['cat-mel_2bar_big', 'hierdec-mel_16bar'], help='name of the MusicVAE model configuration (e.g. hierdec-mel_16bar)')
+    arg_parser.add_argument('musicvae_config', choices=['cat-mel_2bar_big', 'hierdec-mel_4bar', 'hierdec-mel_8bar', 'hierdec-mel_16bar'], help='name of the MusicVAE model configuration (e.g. hierdec-mel_16bar)')
     arg_parser.add_argument('musicvae_path', help='path to MusicVAE model checkpoints')
+    arg_parser.add_argument('--export_step', type=int, default=5, help='steps between batches when exporting validation output (default: 5)')
     args = arg_parser.parse_args()
     model_path, tb_path, out_path, log_path = make_experiment_dir(args.exp_path)
     setup_logging(log_path)
@@ -37,6 +38,9 @@ if __name__ == '__main__':
     # set up synesthetic model
     model = SynestheticVae(visual_model=vis_model, auditive_model=music_vae, learning_rate=1e-3)
     model.build()
+
+    # set export step
+    model.export_step = args.export_step
 
     # load data
     train_iterator, valid_iterator = dataset.get_train_image_iterators(batch_size=args.batch_size)
