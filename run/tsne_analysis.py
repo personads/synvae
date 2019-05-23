@@ -20,6 +20,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('out_path', help='path to output')
     arg_parser.add_argument('--num_points', default=1000, help='number of data points to plot (default: 1000)')
     arg_parser.add_argument('--eval_task', default='', help='if path to eval JSON is provided, only data points from the task are plotted (default: None)')
+    arg_parser.add_argument('--tsne_latents', default='', help='if path to tSNE latents is provided, repeated projection will be skipped (default: None)')
     args = arg_parser.parse_args()
 
     # load data
@@ -29,14 +30,18 @@ if __name__ == '__main__':
     print("Loaded %d latents with dimensionality %d." % (latents.shape[0], latents.shape[1]))
 
     # tSNE
-    tsne_model = TSNE(n_components=2, verbose=True)
-    tsne_latents = tsne_model.fit_transform(latents)
+    if len(args.tsne_latents) > 0:
+        tsne_latents = np.load(args.tsne_latents)
+        print("Loaded tSNE latents from '%s'." % args.tsne_latents)
+    else:
+        tsne_model = TSNE(n_components=2, verbose=True)
+        tsne_latents = tsne_model.fit_transform(latents)
 
-    # save transformation
-    latents_name, latents_ext = os.path.splitext(os.path.basename(args.latent_path))
-    tsne_path = os.path.join(args.out_path, '%s_tsne%s' % (latents_name, latents_ext))
-    np.save(tsne_path, tsne_latents)
-    print("Saved tSNE latents to '%s'." % tsne_path)
+        # save transformation
+        latents_name, latents_ext = os.path.splitext(os.path.basename(args.latent_path))
+        tsne_path = os.path.join(args.out_path, '%s_tsne%s' % (latents_name, latents_ext))
+        np.save(tsne_path, tsne_latents)
+        print("Saved tSNE latents to '%s'." % tsne_path)
 
     # create subset
     if len(args.eval_task) > 0:
