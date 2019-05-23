@@ -16,13 +16,14 @@ class Bam(Dataset):
             'content_bicycle', 'content_bird', 'content_building', 'content_cars', 'content_cat', 'content_dog', 'content_flower', 'content_people', 'content_tree',
             'emotion_gloomy', 'emotion_happy', 'emotion_peaceful', 'emotion_scary',
             'media_oilpaint', 'media_watercolor']
+        self.image_dims = [64, 64, 3]
         logging.info("[BAM] Found %d images in '%s'." % (len(self.data), data_path))
 
 
     def _load_train_image(self, path):
         image = tf.read_file(path)
         image = tf.cast(tf.image.decode_jpeg(image, channels=3), dtype=tf.float32)
-        image = tf.image.random_crop(image, [256, 256, 3])
+        image = tf.image.random_crop(image, self.image_dims)
         image /= 255.0
         return image
 
@@ -33,7 +34,7 @@ class Bam(Dataset):
         # crop to centre
         height, width = tf.shape(image)[0], tf.shape(image)[1]
         min_size = tf.minimum(height, width)
-        image = tf.image.crop_to_bounding_box(image, (height - min_size)//2, (width - min_size)//2, 256, 256)
+        image = tf.image.crop_to_bounding_box(image, (height - min_size)//2, (width - min_size)//2, self.image_dims[0], self.image_dims[1])
         image /= 255.0
         return image
 
