@@ -98,9 +98,10 @@ def calc_latent_kl(vis_latents, aud_latents, perplexity):
     logging.info("Calculating joint probability distribution of auditive latent space...")
     aud_dists = calc_dists(aud_latents)
     aud_distr = tsne._joint_probabilities(distances=aud_dists, desired_perplexity=perplexity, verbose=True)
-    kl = 2.0 * np.dot(vis_distr, np.log(vis_distr / aud_distr))
-    logging.info("Calculated KL divergence of audio-visual latent spaces with perplexity %d: %.2f." % (perplexity, kl))
-    return kl
+    kl_va = 2.0 * np.dot(vis_distr, np.log(vis_distr / aud_distr))
+    kl_av = 2.0 * np.dot(aud_distr, np.log(aud_distr / vis_distr))
+    logging.info("Calculated KL divergences of audio-visual latent spaces with perplexity %d: %.2f VA / %.2f AV." % (perplexity, kl_va, kl_av))
+    return kl_va, kl_av
 
 
 def calc_cls_metrics(labels, predictions):

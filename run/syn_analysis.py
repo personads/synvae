@@ -122,7 +122,7 @@ if __name__ == '__main__':
 
     if args.kl:
         logging.info("Calculating KL divergence between latents (perplexity: %d)..." % args.perplexity)
-        kl = calc_latent_kl(vis_latents, aud_latents, perplexity=args.perplexity)
+        kl_va, kl_av = calc_latent_kl(vis_latents, aud_latents, perplexity=args.perplexity)
 
     logging.info("Calculating similarities...")
     vis_sims = calc_dists(vis_latents)
