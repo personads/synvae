@@ -75,11 +75,10 @@ class MusicVae(BaseModel):
         music.sequence_proto_to_midi_file(note_seq, path)
 
 
-    def sample(self, tf_session, num_samples, temperature):
-        np.random.seed(42)
-        tf.random.set_random_seed(42)
+    def sample(self, tf_session, latents, temperature):
+        num_samples = latents.shape[0]
         feed_dict = {
-            self.z_input: (np.random.randn(self.batch_size, self.latent_dim).astype(np.float32)),
+            self.z_input: latents,
             self.temperature: temperature
         }
 
