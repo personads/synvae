@@ -55,12 +55,17 @@ class Bam(Dataset):
         return train_images, train_labels, valid_images, valid_labels
 
 
-    def filter_uncertain_by_labels(self, label_cat):
-        '''Reduces data to items with certain labels in the specified category (e.g. 'emotion', 'content', 'media')'''
-        # reduce labels to specified category
-        cat_idcs = [i for i in range(len(self.label_descs)) if self.label_descs[i].startswith(label_cat)]
-        self.labels = self.labels[:, cat_idcs]
-        # TODO
+    def filter_uncertain(self):
+        self.labels[(self.labels == .5)] = 0.
+        self.labels = np.around(self.labels)
+
+
+    def get_iterator(self, batch_size):
+        paths = tf.data.Dataset.from_tensor_slices({'images': self.data, 'labels': self.labels})
+        dataset = paths.map(self._load_test_data, num_parallel_calls=multiprocessing.cpu_count())
+        dataset = dataset.batch(batch_size, drop_remainder=True)
+        iterator = dataset.make_initializable_iterator()
+        return iterator
 
 
     def get_image_iterator(self, batch_size):

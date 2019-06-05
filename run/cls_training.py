@@ -26,6 +26,7 @@ if __name__ == '__main__':
     elif args.task == 'bam':
         model = BamCnn(batch_size=args.batch_size)
         dataset = Bam(args.data_path)
+        dataset.filter_uncertain()
     model.build()
 
     # load data
