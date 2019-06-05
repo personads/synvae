@@ -1,5 +1,6 @@
 import logging, os, sys
 
+import numpy as np
 import tensorflow as tf
 
 from collections import defaultdict
