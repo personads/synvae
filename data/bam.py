@@ -40,11 +40,11 @@ class Bam(Dataset):
 
 
     def _load_train_data(self, pl_dict):
-        return self._load_train_image(pl_dict['images']), pl_dict['labels']
+        return {'images': self._load_train_image(pl_dict['images']), 'labels': pl_dict['labels']}
 
 
     def _load_test_data(self, pl_dict):
-        return self._load_test_image(pl_dict['images']), pl_dict['labels']
+        return {'images': self._load_test_image(pl_dict['images']), 'labels': pl_dict['labels']}
 
 
     def split_train_data(self):
@@ -71,16 +71,16 @@ class Bam(Dataset):
         return iterator
 
 
-    def get_train_iterators(self, batch_size):
+    def get_train_iterators(self, batch_size, buffer_size=1000):
         train_images, train_labels, valid_images, valid_labels = self.split_train_data()
         # construct training dataset
         train_paths = tf.data.Dataset.from_tensor_slices({'images': train_images, 'labels': train_labels})
         train_dataset = train_paths.map(self._load_train_data, num_parallel_calls=multiprocessing.cpu_count())
-        train_dataset = train_dataset.shuffle(train_images.shape[0]).batch(batch_size, drop_remainder=True)
+        train_dataset = train_dataset.shuffle(buffer_size).batch(batch_size, drop_remainder=True)
         train_iterator = train_dataset.make_initializable_iterator()
         # construct validation dataset
         valid_paths = tf.data.Dataset.from_tensor_slices({'images': valid_images, 'labels': valid_labels})
-        valid_dataset = valid_paths.map(self._load_test_image, num_parallel_calls=multiprocessing.cpu_count())
+        valid_dataset = valid_paths.map(self._load_test_data, num_parallel_calls=multiprocessing.cpu_count())
         valid_dataset = valid_dataset.batch(batch_size, drop_remainder=True)
         valid_iterator = valid_dataset.make_initializable_iterator()
         return train_iterator, valid_iterator

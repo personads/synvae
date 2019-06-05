@@ -19,7 +19,7 @@ class VisualCnn(BaseModel):
 
 
     def __repr__(self):
-        res  = '<VisualCnn: '
+        res  = '<%s: ' % self.__class__.__name__
         res += str(self.images.shape[1:])
         res += ' -> (%d classes)' % self.num_labels
         res += '>'
@@ -64,6 +64,7 @@ class VisualCnn(BaseModel):
 class BamCnn(VisualCnn):
     def __init__(self, batch_size):
         super().__init__(img_height=64, img_width=64, img_depth=3, num_labels=15, batch_size=batch_size, learning_rate=1e-4)
+        self.labels = tf.placeholder(tf.float32, [self.batch_size, self.num_labels], name='labels') # multi-class
 
 
     def build_cnn(self, images):
