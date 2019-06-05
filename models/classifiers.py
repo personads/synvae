@@ -52,7 +52,11 @@ class VisualCnn(BaseModel):
 
 
     def run_train_step(self, tf_session, batch):
-        _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, self.merge_op], feed_dict={self.images: batch['images'], self.labels: batch['labels']})
+        _, cur_loss, summaries, pred = tf_session.run([self.train_op, self.loss, self.merge_op, self.predictions], feed_dict={self.images: batch['images'], self.labels: batch['labels']})
+        '''print("PRED:")
+        print(pred[:10,:])
+        print("TRUTH:")
+        print(batch['labels'][:10,:])'''
         return {'All': cur_loss}, summaries
 
 
@@ -80,7 +84,8 @@ class BamCnn(VisualCnn):
 
 
     def calc_loss(self, predictions, truths):
-        return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictions, labels=truths)) # multi-class
+        return -tf.reduce_sum((truths * tf.log(predictions + 1e-9)) + ((1 - truths) * tf.log(1 - predictions + 1e-9)))
+        # return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictions, labels=truths)) # multi-class
 
 
 class CifarCnn(VisualCnn):
