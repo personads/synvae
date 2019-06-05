@@ -39,6 +39,14 @@ class Bam(Dataset):
         return image
 
 
+    def _load_train_data(self, pl_dict):
+        return self._load_train_image(pl_dict['images']), pl_dict['labels']
+
+
+    def _load_test_data(self, pl_dict):
+        return self._load_test_image(pl_dict['images']), pl_dict['labels']
+
+
     def split_train_data(self):
         split_idx = int(len(self.data)*.8)
         train_images, train_labels = self.data[:split_idx], self.labels[:split_idx]
@@ -47,12 +55,35 @@ class Bam(Dataset):
         return train_images, train_labels, valid_images, valid_labels
 
 
+    def filter_uncertain_by_labels(self, label_cat):
+        '''Reduces data to items with certain labels in the specified category (e.g. 'emotion', 'content', 'media')'''
+        # reduce labels to specified category
+        cat_idcs = [i for i in range(len(self.label_descs)) if self.label_descs[i].startswith(label_cat)]
+        self.labels = self.labels[:, cat_idcs]
+        # TODO
+
+
     def get_image_iterator(self, batch_size):
         paths = tf.data.Dataset.from_tensor_slices(self.data)
         dataset = paths.map(self._load_test_image, num_parallel_calls=multiprocessing.cpu_count())
         dataset = dataset.batch(batch_size, drop_remainder=True)
         iterator = dataset.make_initializable_iterator()
         return iterator
+
+
+    def get_train_iterators(self, batch_size):
+        train_images, train_labels, valid_images, valid_labels = self.split_train_data()
+        # construct training dataset
+        train_paths = tf.data.Dataset.from_tensor_slices({'images': train_images, 'labels': train_labels})
+        train_dataset = train_paths.map(self._load_train_data, num_parallel_calls=multiprocessing.cpu_count())
+        train_dataset = train_dataset.shuffle(train_images.shape[0]).batch(batch_size, drop_remainder=True)
+        train_iterator = train_dataset.make_initializable_iterator()
+        # construct validation dataset
+        valid_paths = tf.data.Dataset.from_tensor_slices({'images': valid_images, 'labels': valid_labels})
+        valid_dataset = valid_paths.map(self._load_test_image, num_parallel_calls=multiprocessing.cpu_count())
+        valid_dataset = valid_dataset.batch(batch_size, drop_remainder=True)
+        valid_iterator = valid_dataset.make_initializable_iterator()
+        return train_iterator, valid_iterator
 
 
     def get_train_image_iterators(self, batch_size, buffer_size=1000):

@@ -6,7 +6,7 @@ import logging
 import tensorflow as tf
 
 from data import *
-from models.classifiers import MnistCnn, CifarCnn
+from models.classifiers import *
 from utils.experiments import *
 
 
@@ -23,6 +23,9 @@ if __name__ == '__main__':
     elif args.task == 'cifar':
         model = CifarCnn(batch_size=args.batch_size)
         dataset = Cifar(args.data_path)
+    elif args.task == 'bam':
+        model = BamCnn(batch_size=args.batch_size)
+        dataset = Bam(args.data_path)
     model.build()
 
     # load data

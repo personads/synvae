@@ -34,7 +34,7 @@ class VisualCnn(BaseModel):
     def build(self):
         self.predictions = self.build_cnn(self.images)
         # set up loss
-        self.loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=self.predictions, labels=self.labels))
+        self.loss = self.calc_loss(self.predictions, self.labels)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
@@ -47,6 +47,10 @@ class VisualCnn(BaseModel):
         logging.info(self)
 
 
+    def calc_loss(self, predictions, truths):
+        return tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=predictions, labels=truths))
+
+
     def run_train_step(self, tf_session, batch):
         _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, self.merge_op], feed_dict={self.images: batch['images'], self.labels: batch['labels']})
         return {'All': cur_loss}, summaries
@@ -55,6 +59,27 @@ class VisualCnn(BaseModel):
     def run_test_step(self, tf_session, batch, batch_idx, out_path):
         cur_loss = tf_session.run(self.loss, feed_dict={self.images: batch['images'], self.labels: batch['labels']})
         return {'All': cur_loss}
+
+
+class BamCnn(VisualCnn):
+    def __init__(self, batch_size):
+        super().__init__(img_height=64, img_width=64, img_depth=3, num_labels=15, batch_size=batch_size, learning_rate=1e-4)
+
+
+    def build_cnn(self, images):
+        inputs = tf.keras.layers.InputLayer(input_shape=(self.img_height, self.img_width, self.img_depth))(images)
+        conv1 = tf.keras.layers.Conv2D(filters=64, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(inputs)
+        conv2 = tf.keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv1)
+        conv3 = tf.keras.layers.Conv2D(filters=128, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv2)
+        conv4 = tf.keras.layers.Conv2D(filters=256, kernel_size=3, strides=2, padding='same', activation=tf.nn.relu)(conv3)
+        flat = tf.keras.layers.Flatten()(conv4)
+        dense = tf.keras.layers.Dense(units=(self.img_width//16 * self.img_height//16 * 256), activation=tf.nn.relu)(flat)
+        predictions = tf.keras.layers.Dense(self.num_labels, activation=tf.nn.sigmoid)(dense) # multi-class
+        return predictions
+
+
+    def calc_loss(self, predictions, truths):
+        return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictions, labels=truths)) # multi-class
 
 
 class CifarCnn(VisualCnn):
