@@ -77,7 +77,7 @@ if __name__ == '__main__':
     logging.info("\rClassified %d images with avg_loss %.2f." % (predictions.shape[0], avg_loss))
 
     logging.info("Calculating metrics...")
-    total_precision, label_precision, label_recall, label_accuracy = calc_cls_metrics(labels, predictions) if args.task != 'bam' else calc_mltcls_metrics(labels, predictions)
+    avg_accuracy, label_precision, label_recall, label_accuracy = calc_cls_metrics(labels, predictions) if args.task != 'bam' else calc_mltcls_metrics(labels, predictions)
 
     logging.info("Metrics by class:")
     for label_idx, label in enumerate(dataset.label_descs):
@@ -86,4 +86,4 @@ if __name__ == '__main__':
             label_precision[label_idx],
             label_recall[label_idx]
             ))
-    logging.info("Total Precision: %.2f." % total_precision)
+    logging.info("Mean Accuracy: %.2f." % avg_accuracy)

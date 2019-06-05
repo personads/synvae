@@ -107,7 +107,6 @@ def calc_latent_kl(vis_latents, aud_latents, perplexity):
 def calc_cls_metrics(labels, predictions):
     # compute total accuracy
     pred_labels = np.argmax(predictions, axis=1)
-    total_precision = np.mean(labels == pred_labels)
 
     # compute accuracy, precision and recall by label
     label_accuracy = np.zeros(predictions.shape[1])
@@ -124,7 +123,7 @@ def calc_cls_metrics(labels, predictions):
         label_recall[lbl] = tp / (tp + fn)
         label_accuracy[lbl] = (tp + tn) / (tp + fp + tn + fn)
 
-    return total_precision, label_precision, label_recall, label_accuracy
+    return np.mean(label_accuracy), label_precision, label_recall, label_accuracy
 
 
 def calc_mltcls_metrics(labels, predictions):
@@ -136,17 +135,17 @@ def calc_mltcls_metrics(labels, predictions):
     label_precision = np.zeros(predictions.shape[1])
     label_recall = np.zeros(predictions.shape[1])
     for lbl in range(predictions.shape[1]):
-        lbl_idcs = np.where(labels == (lbl * np.ones_like(labels)))
-        oth_idcs = np.where(labels != (lbl * np.ones_like(labels)))
-        tp = np.sum(pred_labels[lbl_idcs] == 1.)
-        fp = np.sum(pred_labels[oth_idcs] == 1.)
-        tn = np.sum(pred_labels[oth_idcs] == 0.)
-        fn = np.sum(pred_labels[lbl_idcs] == 0.)
+        lbl_idcs = np.where(labels[:, lbl] == np.ones([labels.shape[0], 1]))
+        oth_idcs = np.where(labels[:, lbl] == np.zeros([labels.shape[0], 1]))
+        tp = np.sum(predictions[lbl_idcs, lbl] == 1.)
+        fp = np.sum(predictions[oth_idcs, lbl] == 1.)
+        tn = np.sum(predictions[oth_idcs, lbl] == 0.)
+        fn = np.sum(predictions[lbl_idcs, lbl] == 0.)
         label_precision[lbl] = tp / (tp + fp)
         label_recall[lbl] = tp / (tp + fn)
         label_accuracy[lbl] = (tp + tn) / (tp + fp + tn + fn)
 
-    return avg_accuracy, label_precision, label_recall, label_accuracy
+    return np.mean(label_accuracy), label_precision, label_recall, label_accuracy
 
 
 def log_metrics(label_descs, top_n, rel_sim_by_label, oth_sim_by_label, precision_by_label):
