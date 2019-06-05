@@ -36,6 +36,9 @@ if __name__ == '__main__':
     elif args.task == 'cifar':
         model = CifarCnn(batch_size=args.batch_size)
         dataset = Cifar(args.data_path)
+    elif args.task == 'bam':
+        model = BamCnn(batch_size=args.batch_size)
+        dataset = Bam(args.data_path)
     model.build()
 
     # load data
@@ -74,7 +77,7 @@ if __name__ == '__main__':
     logging.info("\rClassified %d images with avg_loss %.2f." % (predictions.shape[0], avg_loss))
 
     logging.info("Calculating metrics...")
-    total_precision, label_precision, label_recall, label_accuracy = calc_cls_metrics(labels, predictions)
+    total_precision, label_precision, label_recall, label_accuracy = calc_cls_metrics(labels, predictions) if args.task != 'bam' else calc_mltcls_metrics(labels, predictions)
 
     logging.info("Metrics by class:")
     for label_idx, label in enumerate(dataset.label_descs):
