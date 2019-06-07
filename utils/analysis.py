@@ -127,6 +127,7 @@ def calc_cls_metrics(labels, predictions):
 
 
 def calc_mltcls_metrics(labels, predictions):
+    print("lbl:", labels.shape, labels[0], "pred:", predictions.shape, predictions[0])
     # round predictions to {0, 1}
     predictions = np.around(predictions)
 
@@ -135,8 +136,8 @@ def calc_mltcls_metrics(labels, predictions):
     label_precision = np.zeros(predictions.shape[1])
     label_recall = np.zeros(predictions.shape[1])
     for lbl in range(predictions.shape[1]):
-        lbl_idcs = np.where(labels[:, lbl] == np.ones([labels.shape[0], 1]))
-        oth_idcs = np.where(labels[:, lbl] == np.zeros([labels.shape[0], 1]))
+        lbl_idcs = np.where(labels[:, lbl] == 1)
+        oth_idcs = np.where(labels[:, lbl] == 0)
         tp = np.sum(predictions[lbl_idcs, lbl] == 1.)
         fp = np.sum(predictions[oth_idcs, lbl] == 1.)
         tn = np.sum(predictions[oth_idcs, lbl] == 0.)

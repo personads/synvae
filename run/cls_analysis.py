@@ -6,14 +6,14 @@ import logging
 import tensorflow as tf
 
 from data import *
-from models.classifiers import MnistCnn, CifarCnn
+from models.classifiers import *
 from utils.analysis import *
 from utils.experiments import *
 
 
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(description='VisualCNN - Analysis')
-    arg_parser.add_argument('task', choices=['mnist', 'cifar'], help='name of the task (mnist, cifar)')
+    arg_parser.add_argument('task', choices=['mnist', 'cifar', 'bam'], help='name of the task')
     arg_parser.add_argument('model_path', help='path to VisualCNN model')
     arg_parser.add_argument('data_path', help='path to data (not required for original MNIST)')
     arg_parser.add_argument('out_path', help='path to output')
@@ -39,6 +39,7 @@ if __name__ == '__main__':
     elif args.task == 'bam':
         model = BamCnn(batch_size=args.batch_size)
         dataset = Bam(args.data_path)
+        dataset.filter_uncertain()
     model.build()
 
     # load data
@@ -77,7 +78,7 @@ if __name__ == '__main__':
     logging.info("\rClassified %d images with avg_loss %.2f." % (predictions.shape[0], avg_loss))
 
     logging.info("Calculating metrics...")
-    avg_accuracy, label_precision, label_recall, label_accuracy = calc_cls_metrics(labels, predictions) if args.task != 'bam' else calc_mltcls_metrics(labels, predictions)
+    avg_accuracy, label_precision, label_recall, label_accuracy = calc_cls_metrics(dataset.labels, predictions) if args.task != 'bam' else calc_mltcls_metrics(dataset.labels, predictions)
 
     logging.info("Metrics by class:")
     for label_idx, label in enumerate(dataset.label_descs):

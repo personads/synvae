@@ -58,6 +58,7 @@ class Bam(Dataset):
     def filter_uncertain(self):
         self.labels[(self.labels == .5)] = 0.
         self.labels = np.around(self.labels)
+        logging.info("[BAM] Filtered uncertain values (set to 0).")
 
 
     def get_iterator(self, batch_size):
