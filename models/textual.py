@@ -42,6 +42,7 @@ class TextualVae(BaseModel):
         tar_inp = self.texts[:, :-1]
         tar_real = self.texts[:, 1:]
         enc_padding_mask, look_ahead_mask, dec_padding_mask = self.create_masks(self.texts, tar_inp)
+        self.lam = look_ahead_mask
 
         self.latents = self.build_encoder(self.texts, mask=enc_padding_mask)
         self.reconstructions = tf.nn.softmax(self.build_decoder(self.latents, tar_inp, look_ahead_mask, dec_padding_mask))
@@ -55,7 +56,8 @@ class TextualVae(BaseModel):
 
 
     def calc_loss(self, originals, reconstructions):
-        self.recon_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=reconstructions, labels=originals))
+        padding_mask = tf.cast(tf.math.logical_not(tf.math.equal(originals, 0)), dtype=tf.float32)
+        self.recon_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=reconstructions, labels=originals) * padding_mask)
         # KL divergence
         # self.latent_loss = tf.reduce_mean(-0.5 * tf.reduce_sum(1. + sigmas - tf.square(means) - tf.exp(sigmas), axis=-1)) # mean KL over latent dims
         # loss = self.recon_loss + self.beta * self.latent_loss
@@ -108,7 +110,7 @@ class TextualVae(BaseModel):
             export_text = '%d: "%s"' % (self.epoch, ' '.join(recon_txt))
             if self.epoch == 1:
                 orig_txt = self.convert_indices_to_texts(batch[0:1])[0]
-                export_text = 'ORIG: "%s"\n' % orig_txt + export_text
+                export_text = 'ORIG: "%s"\n' % ' '.join(orig_txt) + export_text
             self.save_text(export_text, os.path.join(out_path, str(batch_idx) + '_recons.txt'))
         return losses
 
