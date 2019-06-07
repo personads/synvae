@@ -131,6 +131,8 @@ if __name__ == '__main__':
     # parse precision ranks
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
+    labels = dataset.labels
+
     logging.info("Calculating metrics for visual latents...")
     vis_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(vis_latents, labels, vis_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
