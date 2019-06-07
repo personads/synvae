@@ -18,7 +18,7 @@ class TextualVae(BaseModel):
         self.epoch = 0
         self.training = False
         # set up computation graph
-        self.texts = tf.placeholder(tf.int32, [self.batch_size, self.max_length], name='texts')
+        self.texts = tf.placeholder(tf.int64, [self.batch_size, self.max_length], name='texts')
 
 
     def __repr__(self):
@@ -42,12 +42,13 @@ class TextualVae(BaseModel):
         tar_inp = self.texts[:, :-1]
         tar_real = self.texts[:, 1:]
         enc_padding_mask, look_ahead_mask, dec_padding_mask = self.create_masks(self.texts, tar_inp)
-        self.lam = look_ahead_mask
 
         self.latents = self.build_encoder(self.texts, mask=enc_padding_mask)
-        self.reconstructions = tf.nn.softmax(self.build_decoder(self.latents, tar_inp, look_ahead_mask, dec_padding_mask))
+        self.reconstructions = self.build_decoder(self.latents, tar_inp, look_ahead_mask, dec_padding_mask)
         # set up loss
         self.loss = self.calc_loss(tar_real, self.reconstructions)
+        predictions = tf.cast(tf.argmax(self.reconstructions, axis=-1), dtype=tf.int64)
+        self.accuracy = tf.reduce_mean(tf.keras.metrics.sparse_categorical_accuracy(tar_real, predictions))
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
@@ -57,7 +58,8 @@ class TextualVae(BaseModel):
 
     def calc_loss(self, originals, reconstructions):
         padding_mask = tf.cast(tf.math.logical_not(tf.math.equal(originals, 0)), dtype=tf.float32)
-        self.recon_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=reconstructions, labels=originals) * padding_mask)
+        # self.recon_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=reconstructions, labels=originals) * padding_mask)
+        self.recon_loss = tf.contrib.seq2seq.sequence_loss(logits=reconstructions, targets=originals, weights=padding_mask)
         # KL divergence
         # self.latent_loss = tf.reduce_mean(-0.5 * tf.reduce_sum(1. + sigmas - tf.square(means) - tf.exp(sigmas), axis=-1)) # mean KL over latent dims
         # loss = self.recon_loss + self.beta * self.latent_loss
@@ -96,21 +98,21 @@ class TextualVae(BaseModel):
 
     def run_train_step(self, tf_session, batch):
         self.training = True
-        _, loss = tf_session.run([self.train_op, self.loss], feed_dict={self.texts: batch})
-        losses = {'All': loss}
+        _, loss, acc = tf_session.run([self.train_op, self.loss, self.accuracy], feed_dict={self.texts: batch})
+        losses = {'All': loss, 'Acc': acc}
         return losses, None
 
 
     def run_test_step(self, tf_session, batch, batch_idx, out_path, export_step=5):
-        loss, reconstructions = tf_session.run([self.loss, self.reconstructions], feed_dict={self.texts: batch})
-        losses = {'All': loss}
+        loss, reconstructions, acc = tf_session.run([self.loss, self.reconstructions, self.accuracy], feed_dict={self.texts: batch})
+        losses = {'All': loss, 'Acc': acc}
         # save original image and reconstruction
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
             recon_txt = self.convert_indices_to_texts(self.convert_output_to_indices(reconstructions[0:1]))[0]
-            export_text = '%d: "%s"' % (self.epoch, ' '.join(recon_txt))
+            export_text = '%d (%d): "%s"' % (self.epoch, len(recon_txt), ' '.join(recon_txt))
             if self.epoch == 1:
                 orig_txt = self.convert_indices_to_texts(batch[0:1])[0]
-                export_text = 'ORIG: "%s"\n' % ' '.join(orig_txt) + export_text
+                export_text = 'ORIG (%d): "%s"\n' % (len(orig_txt), ' '.join(orig_txt)) + export_text
             self.save_text(export_text, os.path.join(out_path, str(batch_idx) + '_recons.txt'))
         return losses
 
@@ -129,7 +131,7 @@ class TextualVae(BaseModel):
         for o in range(indices.shape[0]):
             cur_text = []
             for t in range(indices.shape[1]):
-                if indices[o, t] == 0:
+                if indices[o, t] == self.vocab_size-1:
                     break
                 cur_text.append(self.idx_tkn_map[indices[o, t]])
             texts.append(cur_text)

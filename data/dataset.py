@@ -37,9 +37,9 @@ class Dataset:
         return train_iterator, valid_iterator
 
 
-    def get_train_image_iterators(self, batch_size):
+    def get_train_image_iterators(self, batch_size, buffer_size=1000):
         train_images, _, valid_images, _ = self.split_train_data()
-        train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(train_images.shape[0]).batch(batch_size, drop_remainder=True)
+        train_dataset = tf.data.Dataset.from_tensor_slices(train_images).shuffle(buffer_size).batch(batch_size, drop_remainder=True)
         train_iterator = train_dataset.make_initializable_iterator()
         valid_dataset = tf.data.Dataset.from_tensor_slices(valid_images).batch(batch_size, drop_remainder=True)
         valid_iterator = valid_dataset.make_initializable_iterator()
