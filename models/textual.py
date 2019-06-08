@@ -1,4 +1,4 @@
-import logging, os, sys
+import logging
 
 import numpy as np
 import tensorflow as tf
@@ -6,8 +6,8 @@ import tensorflow as tf
 from models import transformer
 from models.base import BaseModel
 
-class TextualVae(BaseModel):
-    def __init__(self, idx_tkn_map, max_length, latent_dim, beta, batch_size, learning_rate):
+class SarcVae(BaseModel):
+    def __init__(self, idx_tkn_map, max_length, latent_dim, beta, batch_size, learning_rate=1e-4):
         self.idx_tkn_map = idx_tkn_map
         self.vocab_size = len(self.idx_tkn_map)
         self.max_length = max_length
@@ -16,96 +16,139 @@ class TextualVae(BaseModel):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epoch = 0
-        self.training = False
-        # set up computation graph
-        self.texts = tf.placeholder(tf.int64, [self.batch_size, self.max_length], name='texts')
+        self.training = True
 
 
     def __repr__(self):
         res  = '<%s: ' % self.__class__.__name__
         res += str(self.texts.shape[1:])
         res += ' -> %d (β=%s)' % (self.latent_dim, str(self.beta))
-        res += ' -> ' + str(self.reconstructions.shape[1:])
+        res += ' -> ' + str(self.predictions.shape[1:])
         res += '>'
         return res
 
 
-    def build_encoder(self, texts):
-        pass
+    def _init_placeholder(self):
+        self.texts = tf.placeholder(tf.int64, [self.batch_size, self.max_length], name='texts')
 
+        self.encoder_inputs = self.texts[:, 1:]
 
-    def build_decoder(self, latents):
-        pass
+        # start_tokens = tf.fill([self.batch_size, 1], self.vocab_size-2)
+
+        if self.training:
+            # # slice last pad token
+            # target_slice_last_1 = tf.slice(self.targets, [0, 0],
+            #         [self.batch_size, self.max_length-1])
+            # self.decoder_inputs = tf.concat([start_tokens, target_slice_last_1], axis=1)
+            self.decoder_inputs = self.texts[:, :-1]
+        else:
+            pad_tokens = tf.zeros([self.batch_size, self.max_length-1], dtype=tf.int32) # 0: PAD ID
+            self.decoder_inputs = tf.concat([start_tokens, pad_tokens], axis=1)
 
 
     def build(self):
-        tar_inp = self.texts[:, :-1]
-        tar_real = self.texts[:, 1:]
-        enc_padding_mask, look_ahead_mask, dec_padding_mask = self.create_masks(self.texts, tar_inp)
+        self._init_placeholder()
 
-        self.latents = self.build_encoder(self.texts, mask=enc_padding_mask)
-        self.reconstructions = self.build_decoder(self.latents, tar_inp, look_ahead_mask, dec_padding_mask)
-        # set up loss
-        self.loss = self.calc_loss(tar_real, self.reconstructions)
-        predictions = tf.cast(tf.argmax(self.reconstructions, axis=-1), dtype=tf.int64)
-        self.accuracy = tf.reduce_mean(tf.keras.metrics.sparse_categorical_accuracy(tar_real, predictions))
-        # set up optimizer
+        encoder_emb_inp = self.build_embedding(self.encoder_inputs)
+        self.encoder_outputs = self.build_encoder(encoder_emb_inp)
+
+        decoder_emb_inp = self.build_embedding(self.decoder_inputs)
+        decoder_outputs = self.build_decoder(decoder_emb_inp, self.encoder_outputs)
+
+        output = tf.layers.dense(decoder_outputs, self.vocab_size)
+        self.train_predictions = tf.argmax(output[0], axis=1)
+
+        if self.training:
+            predictions = tf.argmax(output, axis=-1)
+            output, predictions
+        else:
+            next_decoder_inputs = self._filled_next_token(self.decoder_inputs, output, 1)
+
+            # predict output with loop. [encoder_outputs, decoder_inputs (filled next token)]
+            for i in range(2, self.max_length):
+                decoder_emb_inp = self.build_embedding(next_decoder_inputs, encoder=False, reuse=True)
+                decoder_outputs = self.build_decoder(decoder_emb_inp, self.encoder_outputs, reuse=True)
+                output = self.build_output(decoder_outputs, reuse=True)
+
+                next_decoder_inputs = self._filled_next_token(next_decoder_inputs, output, i)
+
+            # slice start_token
+            decoder_input_start_1 = tf.slice(next_decoder_inputs, [0, 1],
+                    [self.batch_size, self.max_length-1])
+            predictions = tf.concat(
+                    [decoder_input_start_1, tf.zeros([self.batch_size, 1], dtype=tf.int32)], axis=1)
+            output, predictions
+
+        self.reconstructions = predictions
+        self.loss = self.calc_loss(output, self.encoder_inputs)
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
-        # set up training operation
         self.train_op = self.optimizer.minimize(self.loss)
         logging.info(self)
 
 
-    def calc_loss(self, originals, reconstructions):
+    def calc_loss(self, reconstructions, originals):
+        print(originals.shape, reconstructions.shape)
         padding_mask = tf.cast(tf.math.logical_not(tf.math.equal(originals, 0)), dtype=tf.float32)
-        # self.recon_loss = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(logits=reconstructions, labels=originals) * padding_mask)
-        self.recon_loss = tf.contrib.seq2seq.sequence_loss(logits=reconstructions, targets=originals, weights=padding_mask)
-        # KL divergence
-        # self.latent_loss = tf.reduce_mean(-0.5 * tf.reduce_sum(1. + sigmas - tf.square(means) - tf.exp(sigmas), axis=-1)) # mean KL over latent dims
-        # loss = self.recon_loss + self.beta * self.latent_loss
-        return self.recon_loss
+        return tf.contrib.seq2seq.sequence_loss(logits=reconstructions, targets=originals, weights=padding_mask)
 
 
-    def create_padding_mask(self, seq):
-        seq = tf.cast(tf.math.equal(seq, 0), tf.float32)
-        # add extra dimensions so that we can add the padding
-        # to the attention logits.
-        return seq[:, tf.newaxis, tf.newaxis, :]  # (batch_size, 1, 1, seq_len)
+    def build_embedding(self, inputs):
+        embeddings = tf.keras.layers.Embedding(self.vocab_size, self.latent_dim)(inputs)
+
+        positional_encoded = transformer.positional_encoding(self.latent_dim, self.max_length-1)
+
+        # Add
+        position_inputs = tf.tile(tf.range(0, self.max_length-1), [self.batch_size])
+        position_inputs = tf.reshape(position_inputs,
+                                     [self.batch_size, self.max_length-1]) # batch_size x [0, 1, 2, ..., n]
+
+        encoded_inputs = tf.add(embeddings,
+                         tf.nn.embedding_lookup(positional_encoded, position_inputs))
+
+        return tf.nn.dropout(encoded_inputs, keep_prob=.8)
 
 
-    def create_look_ahead_mask(self, size):
-        mask = 1 - tf.linalg.band_part(tf.ones((size, size)), -1, 0)
-        return mask  # (seq_len, seq_len)
+    def build_encoder(self, encoder_emb_inp):
+        encoder = transformer.Encoder(
+                 linear_key_dim=self.latent_dim,
+                 linear_value_dim=self.latent_dim,
+                 model_dim=self.latent_dim)
+        return encoder.build(encoder_emb_inp)
 
 
-    def create_masks(self, inp, tar):
-        # Encoder padding mask
-        enc_padding_mask = self.create_padding_mask(inp)
+    def build_decoder(self, decoder_emb_inp, encoder_outputs):
+        decoder = transformer.Decoder(
+                 linear_key_dim=self.latent_dim,
+                 linear_value_dim=self.latent_dim,
+                 model_dim=self.latent_dim)
 
-        # Used in the 2nd attention block in the decoder.
-        # This padding mask is used to mask the encoder outputs.
-        dec_padding_mask = self.create_padding_mask(inp)
+        return decoder.build(decoder_emb_inp, encoder_outputs)
 
-        # Used in the 1st attention block in the decoder.
-        # It is used to pad and mask future tokens in the input received by 
-        # the decoder.
-        look_ahead_mask = self.create_look_ahead_mask(tf.shape(tar)[1])
-        dec_target_padding_mask = self.create_padding_mask(tar)
-        combined_mask = tf.maximum(dec_target_padding_mask, look_ahead_mask)
 
-        return enc_padding_mask, combined_mask, dec_padding_mask
+    def _filled_next_token(self, inputs, logits, decoder_index):
+        tf.argmax(logits[0], axis=1, output_type=tf.int32)
+
+        next_token = tf.slice(
+                tf.argmax(logits, axis=2, output_type=tf.int32),
+                [0, decoder_index-1],
+                [self.batch_size, 1])
+        left_zero_pads = tf.zeros([self.batch_size, decoder_index], dtype=tf.int32)
+        right_zero_pads = tf.zeros([self.batch_size, (self.max_length-1)], dtype=tf.int32)
+        next_token = tf.concat((left_zero_pads, next_token, right_zero_pads), axis=1)
+
+        return inputs + next_token
 
 
     def run_train_step(self, tf_session, batch):
         self.training = True
-        _, loss, acc = tf_session.run([self.train_op, self.loss, self.accuracy], feed_dict={self.texts: batch})
-        losses = {'All': loss, 'Acc': acc}
+        _, loss = tf_session.run([self.train_op, self.loss], feed_dict={self.texts: batch})
+        losses = {'All': loss}
         return losses, None
 
 
     def run_test_step(self, tf_session, batch, batch_idx, out_path, export_step=5):
-        loss, reconstructions, acc = tf_session.run([self.loss, self.reconstructions, self.accuracy], feed_dict={self.texts: batch})
-        losses = {'All': loss, 'Acc': acc}
+        loss, reconstructions = tf_session.run([self.loss, self.reconstructions], feed_dict={self.texts: batch})
+        losses = {'All': loss}
         # save original image and reconstruction
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
             recon_txt = self.convert_indices_to_texts(self.convert_output_to_indices(reconstructions[0:1]))[0]
@@ -136,21 +179,3 @@ class TextualVae(BaseModel):
                 cur_text.append(self.idx_tkn_map[indices[o, t]])
             texts.append(cur_text)
         return texts
-
-
-class SarcVae(TextualVae):
-    def __init__(self, idx_tkn_map, max_length, latent_dim, beta, batch_size):
-        super().__init__(idx_tkn_map=idx_tkn_map, max_length=max_length, latent_dim=latent_dim, beta=beta, batch_size=batch_size, learning_rate=1e-3)
-
-
-    def build_encoder(self, texts, mask=None):
-        encoder = transformer.Encoder(num_layers=4, d_model=self.latent_dim, num_heads=8, dff=1024, vocab_size=self.vocab_size)
-        latents = encoder(texts, training=self.training, mask=mask)
-        return latents
-
-
-    def build_decoder(self, latents, texts, lah_mask=None, pad_mask=None):
-        decoder = transformer.Decoder(num_layers=4, d_model=self.latent_dim, num_heads=8, dff=1024, vocab_size=self.vocab_size)
-        dec_out, attn = decoder(texts, latents, training=self.training, look_ahead_mask=lah_mask, padding_mask=pad_mask)
-        recons = tf.keras.layers.Dense(self.vocab_size)(dec_out)
-        return recons
