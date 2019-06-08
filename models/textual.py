@@ -1,4 +1,4 @@
-import logging
+import logging, os, sys
 
 import numpy as np
 import tensorflow as tf
@@ -23,7 +23,7 @@ class SarcVae(BaseModel):
         res  = '<%s: ' % self.__class__.__name__
         res += str(self.texts.shape[1:])
         res += ' -> %d (β=%s)' % (self.latent_dim, str(self.beta))
-        res += ' -> ' + str(self.predictions.shape[1:])
+        res += ' -> ' + str(self.reconstructions.shape[1:])
         res += '>'
         return res
 
@@ -87,7 +87,6 @@ class SarcVae(BaseModel):
 
 
     def calc_loss(self, reconstructions, originals):
-        print(originals.shape, reconstructions.shape)
         padding_mask = tf.cast(tf.math.logical_not(tf.math.equal(originals, 0)), dtype=tf.float32)
         return tf.contrib.seq2seq.sequence_loss(logits=reconstructions, targets=originals, weights=padding_mask)
 
@@ -151,10 +150,10 @@ class SarcVae(BaseModel):
         losses = {'All': loss}
         # save original image and reconstruction
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
-            recon_txt = self.convert_indices_to_texts(self.convert_output_to_indices(reconstructions[0:1]))[0]
+            recon_txt = self.convert_indices_to_texts(reconstructions[0:1])[0]
             export_text = '%d (%d): "%s"' % (self.epoch, len(recon_txt), ' '.join(recon_txt))
             if self.epoch == 1:
-                orig_txt = self.convert_indices_to_texts(batch[0:1])[0]
+                orig_txt = self.convert_indices_to_texts(batch[0:1, 1:])[0]
                 export_text = 'ORIG (%d): "%s"\n' % (len(orig_txt), ' '.join(orig_txt)) + export_text
             self.save_text(export_text, os.path.join(out_path, str(batch_idx) + '_recons.txt'))
         return losses
