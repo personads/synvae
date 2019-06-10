@@ -183,14 +183,15 @@ class Decoder:
         o1 = tf.identity(decoder_inputs)
 
         for i in range(1, self.num_layers+1):
-            o2 = self._add_and_norm(o1, self._masked_self_attention(q=o1,
-                                                                    k=o1,
-                                                                    v=o1), num=1)
-            o3 = self._add_and_norm(o2, self._encoder_decoder_attention(q=o2,
-                                                                        k=encoder_outputs,
-                                                                        v=encoder_outputs), num=2)
-            o4 = self._add_and_norm(o3, self._positional_feed_forward(o3), num=3)
-            o1 = tf.identity(o4)
+            with tf.variable_scope('layer-%d' % i):
+                o2 = self._add_and_norm(o1, self._masked_self_attention(q=o1,
+                                                                        k=o1,
+                                                                        v=o1), num=1)
+                o3 = self._add_and_norm(o2, self._encoder_decoder_attention(q=o2,
+                                                                            k=encoder_outputs,
+                                                                            v=encoder_outputs), num=2)
+                o4 = self._add_and_norm(o3, self._positional_feed_forward(o3), num=3)
+                o1 = tf.identity(o4)
 
         return o4
 

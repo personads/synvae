@@ -27,18 +27,42 @@ class TextualVae(BaseModel):
         res += ' -> ' + str(self.reconstructions.shape[1:])
         res += '>'
         return res
+    
+
+    def _filled_next_token(self, inputs, logits, decoder_index):
+        next_token = tf.slice(tf.argmax(logits, axis=2, output_type=tf.int32), [0, decoder_index-1], [self.batch_size, 1])
+        left_zero_pads = tf.zeros([self.batch_size, decoder_index], dtype=tf.int32)
+        right_zero_pads = tf.zeros([self.batch_size, (self.max_length-2-left_zero_pads.shape[1])], dtype=tf.int32)
+        next_token = tf.concat((left_zero_pads, next_token, right_zero_pads), axis=1)
+        return inputs + next_token
 
 
     def build(self):
         self.encoder_inputs = self.texts[:, 1:] # no start token
-        self.decoder_inputs = self.texts[:, :-1] # no end token
+        start_tokens = tf.fill([self.batch_size, 1], self.vocab_size-2)
+        pad_tokens = tf.zeros([self.batch_size, self.max_length-2], dtype=tf.int32)
+        self.decoder_inputs = tf.concat([start_tokens, pad_tokens], axis=1)
 
         # build encoder components
         encoder_embeddings = self.build_embedding(self.encoder_inputs)
         self.latents, means, sigmas = self.build_encoder(encoder_embeddings) # (batch_size, max_length-1, latent_dim)
+        self.means, self.sigmas = means, sigmas
 
         # build decoder components
         recon_logits = self.build_decoder(self.latents)
+        self.decoder_inputs = self._filled_next_token(self.decoder_inputs, recon_logits, 1)
+
+        # predict output with loop. [encoder_outputs, decoder_inputs (filled next token)]
+        for i in range(2, self.max_length - 1):
+            recon_logits = self.build_decoder(self.latents)
+            self.decoder_inputs = self._filled_next_token(self.decoder_inputs, recon_logits, i)
+
+        # # slice start_token
+        # decoder_input_start_1 = tf.slice(self.decoder_inputs, [0, 1],
+        #         [self.batch_size, self.max_length-1])
+        # predictions = tf.concat(
+        #         [decoder_input_start_1, tf.zeros([self.batch_size, 1], dtype=tf.int32)], axis=1)
+
         self.reconstructions = tf.argmax(recon_logits, axis=-1) # (batch_size, max_length-1)
 
         # build training components
@@ -83,14 +107,14 @@ class TextualVae(BaseModel):
 
 
     def run_train_step(self, tf_session, batch):
-        _, loss, recon_loss, latent_loss = tf_session.run([self.train_op, self.loss, self.recon_loss, self.latent_loss], feed_dict={self.texts: batch})
-        losses = {'All': loss, 'SeqXE': recon_loss, 'KL': latent_loss}
+        _, loss, recon_loss, latent_loss, means, sigmas = tf_session.run([self.train_op, self.loss, self.recon_loss, self.latent_loss, self.means, self.sigmas], feed_dict={self.texts: batch})
+        losses = {'All': loss, 'SeqXE': recon_loss, 'KL': latent_loss, 'means': np.mean(means), 'sigmas': np.mean(sigmas)}
         return losses, None
 
 
     def run_test_step(self, tf_session, batch, batch_idx, out_path, export_step=5):
-        loss, recon_loss, latent_loss, reconstructions = tf_session.run([self.loss, self.recon_loss, self.latent_loss, self.reconstructions], feed_dict={self.texts: batch})
-        losses = {'All': loss, 'SeqXE': recon_loss, 'KL': latent_loss}
+        loss, recon_loss, latent_loss, reconstructions, means, sigmas = tf_session.run([self.loss, self.recon_loss, self.latent_loss, self.reconstructions, self.means, self.sigmas], feed_dict={self.texts: batch})
+        losses = {'All': loss, 'SeqXE': recon_loss, 'KL': latent_loss, 'means': np.mean(means), 'sigmas': np.mean(sigmas)}
         # save original texts and reconstructions
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
             recon_txt = self.convert_indices_to_texts(reconstructions[0:1])[0]
@@ -121,7 +145,7 @@ class TextualVae(BaseModel):
 
 class SarcVae(TextualVae):
     def __init__(self, idx_tkn_map, max_length, latent_dim, beta, batch_size):
-        super().__init__(idx_tkn_map=idx_tkn_map, max_length=max_length, latent_dim=latent_dim, beta=beta, batch_size=batch_size, learning_rate=1e-3)
+        super().__init__(idx_tkn_map=idx_tkn_map, max_length=max_length, latent_dim=latent_dim, beta=beta, batch_size=batch_size, learning_rate=1e-4)
 
 
     def build_encoder(self, encoder_embeddings):
@@ -145,16 +169,17 @@ class SarcVae(TextualVae):
 
 
     def build_decoder(self, latents):
-        decoder = transformer.Decoder(
-                 num_layers=8,
-                 num_heads=8,
-                 linear_key_dim=self.latent_dim,
-                 linear_value_dim=self.latent_dim,
-                 model_dim=self.latent_dim,
-                 ffn_dim=50,
-                 dropout=0.2)
+        with tf.variable_scope('textual_decoder', reuse=tf.AUTO_REUSE):
+            decoder = transformer.Decoder(
+                     num_layers=8,
+                     num_heads=8,
+                     linear_key_dim=self.latent_dim,
+                     linear_value_dim=self.latent_dim,
+                     model_dim=self.latent_dim,
+                     ffn_dim=50,
+                     dropout=0.2)
 
-        decoder_embeddings = self.build_embedding(self.decoder_inputs)
-        decoder_outputs = decoder.build(decoder_embeddings, latents)
-        recon_logits = tf.layers.dense(decoder_outputs, self.vocab_size) # (batch_size, max_length-1, vocab_size)
+            decoder_embeddings = self.build_embedding(self.decoder_inputs)
+            decoder_outputs = decoder.build(decoder_embeddings, latents)
+            recon_logits = tf.layers.dense(decoder_outputs, self.vocab_size) # (batch_size, max_length-1, vocab_size)
         return recon_logits
