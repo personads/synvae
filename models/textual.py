@@ -2,6 +2,7 @@ import logging, os, sys
 
 import numpy as np
 import tensorflow as tf
+import tensorflow_probability as tfp
 
 from models import transformer
 from models.base import BaseModel
@@ -30,7 +31,9 @@ class TextualVae(BaseModel):
     
 
     def _filled_next_token(self, inputs, logits, decoder_index):
-        next_token = tf.slice(tf.argmax(logits, axis=2, output_type=tf.int32), [0, decoder_index-1], [self.batch_size, 1])
+        cat_dist = tfp.distributions.OneHotCategorical(logits=logits, dtype=tf.float32)
+        predictions = cat_dist.sample()
+        next_token = tf.slice(predictions, [0, decoder_index-1], [self.batch_size, 1])
         left_zero_pads = tf.zeros([self.batch_size, decoder_index], dtype=tf.int32)
         right_zero_pads = tf.zeros([self.batch_size, (self.max_length-2-left_zero_pads.shape[1])], dtype=tf.int32)
         next_token = tf.concat((left_zero_pads, next_token, right_zero_pads), axis=1)
@@ -150,12 +153,12 @@ class SarcVae(TextualVae):
 
     def build_encoder(self, encoder_embeddings):
         encoder = transformer.Encoder(
-                 num_layers=8,
-                 num_heads=8,
-                 linear_key_dim=self.latent_dim,
-                 linear_value_dim=self.latent_dim,
+                 num_layers=4,
+                 num_heads=4,
+                 linear_key_dim=32,
+                 linear_value_dim=32,
                  model_dim=self.latent_dim,
-                 ffn_dim=50,
+                 ffn_dim=32,
                  dropout=0.2)
         encoder_outputs = encoder.build(encoder_embeddings)
 
@@ -171,12 +174,12 @@ class SarcVae(TextualVae):
     def build_decoder(self, latents):
         with tf.variable_scope('textual_decoder', reuse=tf.AUTO_REUSE):
             decoder = transformer.Decoder(
-                     num_layers=8,
-                     num_heads=8,
-                     linear_key_dim=self.latent_dim,
-                     linear_value_dim=self.latent_dim,
+                     num_layers=4,
+                     num_heads=4,
+                     linear_key_dim=32,
+                     linear_value_dim=32,
                      model_dim=self.latent_dim,
-                     ffn_dim=50,
+                     ffn_dim=32,
                      dropout=0.2)
 
             decoder_embeddings = self.build_embedding(self.decoder_inputs)
