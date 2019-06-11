@@ -42,7 +42,7 @@ class TextualVae(BaseModel):
 
         # build decoder components
         recon_logits = self.build_decoder(self.latents)
-        self.reconstructions = tf.argmax(recon_logits, axis=-1) # (batch_size, max_length-1)
+        self.reconstructions = recon_logits
 
         # build training components
         self.loss = self.calc_loss(self.encoder_inputs, recon_logits, means, sigmas)
@@ -98,10 +98,10 @@ class TextualVae(BaseModel):
         losses = {'All': loss, 'SeqXE': recon_loss, 'KL': latent_loss, 'means': np.mean(means), 'sigmas': np.mean(sigmas)}
         # save original texts and reconstructions
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
-            recon_txt = self.convert_indices_to_texts(reconstructions[0:1])[0]
+            recon_txt = self.convert_logits_to_texts(reconstructions[0:1])[0]
             export_text = '%d (%d): "%s"' % (self.epoch, len(recon_txt), ' '.join(recon_txt))
             if self.epoch == 1:
-                orig_txt = self.convert_indices_to_texts(batch[0:1, 1:])[0]
+                orig_txt = self.convert_logits_to_texts(batch[0:1, 1:])[0]
                 export_text = 'ORIG (%d): "%s"\n' % (len(orig_txt), ' '.join(orig_txt)) + export_text
             self.save_text(export_text, os.path.join(out_path, str(batch_idx) + '_recons.txt'))
         return losses
@@ -110,6 +110,11 @@ class TextualVae(BaseModel):
     def save_text(self, text, path):
         with open(path, 'a', encoding='utf8') as fop:
             fop.write(text + '\n')
+
+
+    def convert_logits_to_texts(self, recon_logits):
+        recon_idcs = np.argmax(recon_logits, axis=-1)
+        return self.convert_indices_to_texts(recon_idcs)
 
 
     def convert_indices_to_texts(self, indices):
