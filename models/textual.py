@@ -101,7 +101,7 @@ class TextualVae(BaseModel):
             recon_txt = self.convert_logits_to_texts(reconstructions[0:1])[0]
             export_text = '%d (%d): "%s"' % (self.epoch, len(recon_txt), ' '.join(recon_txt))
             if self.epoch == 1:
-                orig_txt = self.convert_logits_to_texts(batch[0:1, 1:])[0]
+                orig_txt = self.convert_indices_to_texts(batch[0:1, 1:])[0]
                 export_text = 'ORIG (%d): "%s"\n' % (len(orig_txt), ' '.join(orig_txt)) + export_text
             self.save_text(export_text, os.path.join(out_path, str(batch_idx) + '_recons.txt'))
         return losses

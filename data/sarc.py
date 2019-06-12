@@ -9,7 +9,7 @@ class Sarc(Dataset):
     '''Sarc Dataloader'''
     def __init__(self, data_path):
         # init internal variables
-        self.data = np.load(os.path.join(data_path, 'data.npy'))[:1000]
+        self.data = np.load(os.path.join(data_path, 'data.npy'))
         self.labels = np.load(os.path.join(data_path, 'labels.npy'))
         self.idx_tkn_map, self.tkn_idx_map = self._load_maps(data_path)
         self.max_length = self.data.shape[1]
