@@ -61,6 +61,12 @@ class Bam(Dataset):
         logging.info("[BAM] Filtered uncertain values (set to 0).")
 
 
+    def filter_labels(self, keep_labels):
+        keep_cols, self.label_descs = zip(*[(i, l) for i, l in enumerate(self.label_descs) if l in keep_labels])
+        self.labels = self.labels[:, keep_cols]
+        logging.info("[BAM] Filtered dataset labels to '%s' (%d labels)." % (self.label_descs, self.labels.shape[1]))
+
+
     def get_iterator(self, batch_size):
         paths = tf.data.Dataset.from_tensor_slices({'images': self.data, 'labels': self.labels})
         dataset = paths.map(self._load_test_data, num_parallel_calls=multiprocessing.cpu_count())
