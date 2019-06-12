@@ -117,8 +117,6 @@ class SynestheticVae(BaseModel):
         losses = {'All': loss, 'MSE': recon_loss, 'KL': latent_loss}
         # save original image and reconstruction
         if (self.export_step > 0) and ((batch_idx-1) % self.export_step == 0):
-            if self.epoch == 1:
-                self.vis_model.save_image(batch[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_orig.png'))
-            self.vis_model.save_image(reconstructions[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_recon.png'))
+            self.vis_model.export_results(batch, reconstructions, out_path, batch_idx, epoch_idx=self.epoch)
             self.aud_model.save_midi(audios[0], os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_audio.mid'))
         return losses

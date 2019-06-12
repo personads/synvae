@@ -66,6 +66,14 @@ class VisualVae(BaseModel):
         return loss
 
 
+    def export_results(self, originals, reconstructions, out_path, batch_idx, epoch_idx=None):
+        epoch_idx = epoch_idx if epoch_idx else self.epoch
+
+        if epoch_idx == 1:
+            self.save_image(batch[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(epoch_idx) + '_orig.png'))
+        self.save_image(reconstructions[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(epoch_idx) + '_recon.png'))
+
+
     def save_image(self, image_array, path):
         image = PIL.Image.fromarray((image_array * 255).astype(np.uint8))
         image.save(path)
@@ -82,9 +90,7 @@ class VisualVae(BaseModel):
         losses = {'All': loss, 'MSE': recon_loss, 'KL': latent_loss}
         # save original image and reconstruction
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
-            if self.epoch == 1:
-                self.save_image(batch[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_orig.png'))
-            self.save_image(reconstructions[0].squeeze(), os.path.join(out_path, str(batch_idx) + '_' + str(self.epoch) + '_recon.png'))
+            self.vis_model.export_results(batch, reconstructions, out_path, batch_idx, epoch_idx=self.epoch)
         return losses
 
 

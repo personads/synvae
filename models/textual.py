@@ -98,13 +98,20 @@ class TextualVae(BaseModel):
         losses = {'All': loss, 'SeqXE': recon_loss, 'KL': latent_loss, 'means': np.mean(means), 'sigmas': np.mean(sigmas)}
         # save original texts and reconstructions
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
-            recon_txt = self.convert_logits_to_texts(reconstructions[0:1])[0]
-            export_text = '%d (%d): "%s"' % (self.epoch, len(recon_txt), ' '.join(recon_txt))
-            if self.epoch == 1:
-                orig_txt = self.convert_indices_to_texts(batch[0:1, 1:])[0]
-                export_text = 'ORIG (%d): "%s"\n' % (len(orig_txt), ' '.join(orig_txt)) + export_text
-            self.save_text(export_text, os.path.join(out_path, str(batch_idx) + '_recons.txt'))
+            self.export_results(batch, reconstructions, out_path, batch_idx)
         return losses
+
+
+    def export_results(self, originals, reconstructions, out_path, batch_idx, epoch_idx=None):
+        epoch_idx = epoch_idx if epoch_idx else self.epoch
+
+        recon_txt = self.convert_logits_to_texts(reconstructions[0:1])[0]
+        export_text = '%d (%d): "%s"' % (epoch_idx, len(recon_txt), ' '.join(recon_txt))
+        if epoch_idx == 1:
+            orig_txt = self.convert_indices_to_texts(originals[0:1, 1:])[0]
+            export_text = 'ORIG (%d): "%s"\n' % (len(orig_txt), ' '.join(orig_txt)) + export_text
+
+        self.save_text(export_text, os.path.join(out_path, str(batch_idx) + '_recons.txt'))
 
 
     def save_text(self, text, path):
@@ -140,9 +147,8 @@ class SarcVae(TextualVae):
                  num_heads=4,
                  linear_key_dim=32,
                  linear_value_dim=32,
-                 model_dim=self.latent_dim,
-                 ffn_dim=32,
-                 dropout=0.2)
+                 latent_dim=self.latent_dim,
+                 ffn_dim=32)
         encoder_outputs = encoder.build(encoder_embeddings)
 
         # build VAE components with reparametrization
@@ -161,9 +167,8 @@ class SarcVae(TextualVae):
                      num_heads=4,
                      linear_key_dim=32,
                      linear_value_dim=32,
-                     model_dim=self.latent_dim,
-                     ffn_dim=32,
-                     dropout=0.2)
+                     latent_dim=self.latent_dim,
+                     ffn_dim=32)
 
             decoder_embeddings = self.build_embedding(tf.zeros_like(self.decoder_inputs)) # enforce information bottleneck
             decoder_outputs = decoder.build(decoder_embeddings, latents)
