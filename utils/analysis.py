@@ -50,7 +50,7 @@ def calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='eucl
             true_labels = np.where(labels[idx] == 1)[0]
             multi_labels[true_labels, idx] = true_labels
         label_counts = np.sum((multi_labels > -1), axis=-1)
-        label_dist = (label_counts * 100) / np.sum(label_counts)
+        label_dist = np.around((label_counts * 100) / np.sum(label_counts), decimals=2)
         logging.info("Set up multi-class evaluation with class distribution %s." % list(zip(label_counts.tolist(), label_dist.tolist())))
 
     for idx in range(latents.shape[0]):
@@ -207,7 +207,10 @@ def gen_eval_task(mean_latents, latents, labels, num_examples, num_tasks):
     trio_sample_idcs = np.zeros([3, num_examples + num_tasks], dtype=int)
     for tidx in range(3):
         # get indices of samples with same label as current mean
-        rel_idcs = np.squeeze(np.where(labels == (eval_trio[tidx] * np.ones_like(labels))))
+        if len(labels.shape) > 1:
+            rel_idcs = np.squeeze(np.where(labels[:, eval_trio[tidx]] == 1.))
+        else:
+            rel_idcs = np.squeeze(np.where(labels == (eval_trio[tidx] * np.ones_like(labels))))
         rel_latents = latents[rel_idcs]
         # get closest latents of same label per mean
         closest_idcs, closest_dists = get_closest(mean_latents[eval_trio[tidx]], rel_latents)

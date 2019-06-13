@@ -11,12 +11,12 @@ from collections import defaultdict, OrderedDict
 from data import *
 from utils.analysis import *
 from utils.experiments import *
-from models.visual import MnistVae, CifarVae
+from models.visual import *
 
 
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(description='VisualVAE - Analysis')
-    arg_parser.add_argument('task', choices=['mnist', 'cifar'], help='name of the task (mnist, cifar)')
+    arg_parser.add_argument('task', choices=['mnist', 'cifar', 'bam'], help='name of the task')
     arg_parser.add_argument('model_path', help='path to VisualVAE model')
     arg_parser.add_argument('data_path', help='path to data (not required for original MNIST)')
     arg_parser.add_argument('data_split', choices=['train', 'test'], default='test', help='data split (train, test (default))')
@@ -112,18 +112,18 @@ if __name__ == '__main__':
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
     logging.info("Calculating metrics...")
-    mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(latents, labels, sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
+    mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(latents, dataset.labels, sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
         log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
 
     logging.info("Exporting evaluation samples...")
-    classes, examples, tasks = gen_eval_task(mean_latents, latents, labels, args.num_examples, args.num_tasks)
+    classes, examples, tasks = gen_eval_task(mean_latents, latents, dataset.labels, args.num_examples, args.num_tasks)
     eval_config = OrderedDict([
         ('name', args.task.upper()),
         ('code', ''),
         ('data_path', ''),
         ('result_path', ''),
-        ('classes', [dataset.label_descs[l] for l in classes])
+        ('classes', [dataset.label_descs[l] for l in classes]),
         ('examples', examples),
         ('tasks', tasks)
     ])
