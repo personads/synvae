@@ -35,45 +35,58 @@ def get_closest(centroid, latents):
     return np.array(latent_idcs), np.array(dists)
 
 
-def calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='cosine'):
-    # setup result arrays
+def calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='euclidean'):
+    # set up result arrays
     mean_latents = np.zeros([num_labels, latents.shape[1]])
     rel_sim_by_label = np.zeros(num_labels)
     oth_sim_by_label = np.zeros(num_labels)
     label_precision = defaultdict(lambda: np.zeros(num_labels))
     label_idcs = [[] for _ in range(num_labels)]
 
+    # set up multi-class case
+    if len(labels.shape) > 1:
+        multi_labels = np.ones([num_labels, latents.shape[0]]) * -1
+        for idx in range(latents.shape[0]):
+            true_labels = np.where(labels[idx] == 1)[0]
+            multi_labels[true_labels, idx] = true_labels
+        label_counts = np.sum((multi_labels > -1), axis=-1)
+        label_dist = (label_counts * 100) / np.sum(label_counts)
+        logging.info("Set up multi-class evaluation with class distribution %s." % list(zip(label_counts.tolist(), label_dist.tolist())))
+
     for idx in range(latents.shape[0]):
         sys.stdout.write("\rCalculating metrics for %d/%d (%.2f%%)..." % (idx+1, latents.shape[0], ((idx+1)*100)/latents.shape[0]))
         sys.stdout.flush()
 
-        lbl = labels[idx]
-        # sort neighbours by similarity
-        cur_sims = list(enumerate(np.concatenate((sims[idx, :idx], sims[idx, idx+1:]))))
-        cur_sims = sorted(cur_sims, key=lambda el: el[1], reverse=(sim_metric == 'cosine'))
-        # get sorted neighbours and similarities
-        sim_idcs, sim_vals = zip(*cur_sims)
-        sim_idcs, sim_vals = np.array(sim_idcs), np.array(sim_vals)
+        true_labels = [labels[idx]] if len(labels.shape) < 2 else np.where(labels[idx] == 1.)[0] # get true label indices
+        for lbl in true_labels:
+            cur_labels = labels if len(labels.shape) < 2 else multi_labels[lbl] # set up labels for binary and multi-class
 
-        # calculate average distances
-        rel_idcs = np.where(labels == (lbl * np.ones_like(labels)))
-        oth_idcs = np.where(labels != (lbl * np.ones_like(labels)))
-        rel_avg_sim = np.mean(sims[idx][rel_idcs])
-        oth_avg_sim = np.mean(sims[idx][oth_idcs])
-        rel_sim_by_label[lbl] += rel_avg_sim
-        oth_sim_by_label[lbl] += oth_avg_sim
-        label_idcs[lbl].append(idx)
+            # sort neighbours by similarity (without self)
+            cur_sims = list(enumerate(np.concatenate((sims[idx, :idx], sims[idx, idx+1:]))))
+            cur_sims = sorted(cur_sims, key=lambda el: el[1], reverse=(sim_metric == 'cosine'))
+            # get sorted neighbours and similarities
+            sim_idcs, sim_vals = zip(*cur_sims)
+            sim_idcs, sim_vals = np.array(sim_idcs), np.array(sim_vals)
 
-        # calculate precision/recall at top n
-        for rank in prec_ranks:
-            # get top n
-            top_idcs, top_vals = sim_idcs[:rank], sim_vals[:rank]
-            # count TP/FP and calculate precision
-            tp = np.sum(labels[top_idcs] == lbl)
-            fp = np.sum(labels[top_idcs] != lbl)
-            precision = tp / (tp + fp)
-            # store results
-            label_precision[rank][lbl] += precision
+            # calculate average distances
+            rel_idcs = np.where(cur_labels == (lbl * np.ones_like(cur_labels)))
+            oth_idcs = np.where(cur_labels != (lbl * np.ones_like(cur_labels)))
+            rel_avg_sim = np.mean(sims[idx][rel_idcs])
+            oth_avg_sim = np.mean(sims[idx][oth_idcs])
+            rel_sim_by_label[lbl] += rel_avg_sim
+            oth_sim_by_label[lbl] += oth_avg_sim
+            label_idcs[lbl].append(idx)
+
+            # calculate precision/recall at top n
+            for rank in prec_ranks:
+                # get top n
+                top_idcs, top_vals = sim_idcs[:rank], sim_vals[:rank]
+                # count TP/FP and calculate precision
+                tp = np.sum(cur_labels[top_idcs] == lbl)
+                fp = np.sum(cur_labels[top_idcs] != lbl)
+                precision = tp / (tp + fp)
+                # store results
+                label_precision[rank][lbl] += precision
 
     # compute mean latents
     for lbl in range(num_labels):

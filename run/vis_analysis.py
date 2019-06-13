@@ -45,6 +45,11 @@ if __name__ == '__main__':
     elif args.task == 'cifar':
         model = CifarVae(latent_dim=512, beta=args.beta, batch_size=args.batch_size)
         dataset = Cifar(args.data_path)
+    elif args.task == 'bam':
+        model = BamVae(latent_dim=512, beta=args.beta, batch_size=args.batch_size)
+        dataset = Bam(args.data_path)
+        dataset.filter_labels(['emotion_gloomy', 'emotion_happy', 'emotion_peaceful', 'emotion_scary'])
+        dataset.filter_uncertain()
     model.build()
 
     # load data
@@ -96,7 +101,9 @@ if __name__ == '__main__':
             model.save_image(reconstructions[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_recon.png'))
             sys.stdout.write("\rSaved %d/%d (%.2f%%)..." % (idx+1, images.shape[0], ((idx+1)*100)/images.shape[0]))
             sys.stdout.flush()
-        logging.info("\rSaved %d images and reconstructions." % images.shape[0])
+        logging.info("\rSaved %d images and reconstructions to '%s'." % (images.shape[0], args.out_path))
+        np.save(os.path.join(args.out_path, 'latents.npy'), latents)
+        logging.info("Saved %d latent vectors to '%s'." % (latents.shape[0], os.path.join(args.out_path, 'latents.npy')))
 
     logging.info("Calculating similarities...")
     sims = calc_dists(latents)
