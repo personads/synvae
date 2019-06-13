@@ -46,7 +46,7 @@ class TextualVae(BaseModel):
 
         # build training components
         self.loss_weighted = self.calc_loss(self.encoder_inputs, recon_logits, means, sigmas)
-	self.loss = self.recon_loss + self.beta * self.latent_loss #  actual loss to export
+        self.loss = self.recon_loss + self.beta * self.latent_loss #  actual loss to export
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         self.train_op = self.optimizer.minimize(self.loss_weighted)
 
