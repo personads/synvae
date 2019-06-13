@@ -94,8 +94,8 @@ class Encoder:
     def build(self, encoder_inputs):
         o1 = tf.identity(encoder_inputs)
         for i in range(1, self.num_layers+1):
-            o2 = self._add_and_norm(o1, self._self_attention(q=o1, k=o1, v=o1))
-            o3 = self._add_and_norm(o2, build_point_wise_network(o2, self.ffn_dim, self.latent_dim), num=2)
+            o2 = self._add_and_norm(o1, self._self_attention(queries=o1, keys=o1, values=o1))
+            o3 = self._add_and_norm(o2, build_point_wise_network(o2, self.ffn_dim, self.latent_dim))
             o1 = tf.identity(o3)
         return o3
 
@@ -122,8 +122,8 @@ class Decoder:
     def build(self, decoder_inputs, encoder_outputs):
         o1 = tf.identity(decoder_inputs)
         for i in range(1, self.num_layers+1):
-            o2 = self._add_and_norm(o1, self._masked_self_attention(q=o1, k=o1, v=o1))
-            o3 = self._add_and_norm(o2, self._encoder_decoder_attention(q=o2, k=encoder_outputs, v=encoder_outputs))
+            o2 = self._add_and_norm(o1, self._masked_self_attention(queries=o1, keys=o1, values=o1))
+            o3 = self._add_and_norm(o2, self._encoder_decoder_attention(queries=o2, keys=encoder_outputs, values=encoder_outputs))
             o4 = self._add_and_norm(o3, build_point_wise_network(o3, self.ffn_dim, self.latent_dim))
             o1 = tf.identity(o4)
         return o4

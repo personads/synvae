@@ -45,9 +45,10 @@ class TextualVae(BaseModel):
         self.reconstructions = recon_logits
 
         # build training components
-        self.loss = self.calc_loss(self.encoder_inputs, recon_logits, means, sigmas)
+        self.loss_weighted = self.calc_loss(self.encoder_inputs, recon_logits, means, sigmas)
+	self.loss = self.recon_loss + self.beta * self.latent_loss #  actual loss to export
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
-        self.train_op = self.optimizer.minimize(self.loss)
+        self.train_op = self.optimizer.minimize(self.loss_weighted)
 
         logging.info(self)
 
@@ -145,8 +146,8 @@ class SarcVae(TextualVae):
         encoder = transformer.Encoder(
                  num_layers=4,
                  num_heads=4,
-                 linear_key_dim=32,
-                 linear_value_dim=32,
+                 key_dim=32,
+                 value_dim=32,
                  latent_dim=self.latent_dim,
                  ffn_dim=32)
         encoder_outputs = encoder.build(encoder_embeddings)
@@ -165,12 +166,12 @@ class SarcVae(TextualVae):
             decoder = transformer.Decoder(
                      num_layers=4,
                      num_heads=4,
-                     linear_key_dim=32,
-                     linear_value_dim=32,
+                     key_dim=32,
+                     value_dim=32,
                      latent_dim=self.latent_dim,
                      ffn_dim=32)
 
-            decoder_embeddings = self.build_embedding(tf.zeros_like(self.decoder_inputs)) # enforce information bottleneck
+            decoder_embeddings = self.build_embedding(self.decoder_inputs) # enforce information bottleneck
             decoder_outputs = decoder.build(decoder_embeddings, latents)
             recon_logits = tf.layers.dense(decoder_outputs, self.vocab_size) # (batch_size, max_length-1, vocab_size)
         return recon_logits
