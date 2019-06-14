@@ -24,15 +24,16 @@ def calc_dists(latents):
     return squareform(pdist(latents, 'euclidean'))
 
 
-def get_closest(centroid, latents):
-    dists = (latents - centroid)**2
+def get_closest(centroid, latents, rel_idcs):
+    rel_latents = latents[rel_idcs]
+    dists = (rel_latents - centroid)**2
     dists = np.sum(dists, axis=1)
     dists = np.sqrt(dists)
 
-    dists = list(enumerate(dists))
+    dists = [(rel_idcs[i], d) for i, d in enumerate(dists)] # re-map to global latent indices
     dists = sorted(dists, key=lambda el: el[1])
     latent_idcs, dists = zip(*dists)
-    return np.array(latent_idcs), np.array(dists)
+    return np.array(latent_idcs, dtype=int), np.array(dists)
 
 
 def calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='euclidean'):
@@ -62,7 +63,7 @@ def calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='eucl
             cur_labels = labels if len(labels.shape) < 2 else multi_labels[lbl] # set up labels for binary and multi-class
 
             # sort neighbours by similarity (without self)
-            cur_sims = list(enumerate(np.concatenate((sims[idx, :idx], sims[idx, idx+1:]))))
+            cur_sims = [(i, s) for i, s in enumerate(sims[idx]) if i != idx]
             cur_sims = sorted(cur_sims, key=lambda el: el[1], reverse=(sim_metric == 'cosine'))
             # get sorted neighbours and similarities
             sim_idcs, sim_vals = zip(*cur_sims)
@@ -93,15 +94,15 @@ def calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='eucl
         mean_latents[lbl] = np.mean(latents[label_idcs[lbl]], axis=0)
 
     # average out metrics
-    label_count = np.array([len(lbl_idcs) for lbl_idcs in label_idcs])
-    rel_sim_by_label /= label_count
-    oth_sim_by_label /= label_count
+    label_counts = np.array([len(lbl_idcs) for lbl_idcs in label_idcs])
+    rel_sim_by_label /= label_counts
+    oth_sim_by_label /= label_counts
     for rank in prec_ranks:
-        label_precision[rank] /= label_count
+        label_precision[rank] /= label_counts
 
     logging.info("\rCalculated metrics for %d latents.%s" % (latents.shape[0], ' '*16))
 
-    return mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision
+    return mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision, label_counts
 
 
 def calc_latent_kl(vis_latents, aud_latents, perplexity):
@@ -140,7 +141,6 @@ def calc_cls_metrics(labels, predictions):
 
 
 def calc_mltcls_metrics(labels, predictions):
-    print("lbl:", labels.shape, labels[0], "pred:", predictions.shape, predictions[0])
     # round predictions to {0, 1}
     predictions = np.around(predictions)
 
@@ -162,7 +162,7 @@ def calc_mltcls_metrics(labels, predictions):
     return np.mean(label_accuracy), label_precision, label_recall, label_accuracy
 
 
-def log_metrics(label_descs, top_n, rel_sim_by_label, oth_sim_by_label, precision_by_label):
+def log_metrics(label_descs, top_n, rel_sim_by_label, oth_sim_by_label, precision_by_label, label_counts):
     logging.info("Overall metrics:")
     for label_idx, label in enumerate(label_descs):
         logging.info("  %s: %.2f P@%d, %.2f rel sim, %.2f oth sim" % (
@@ -171,7 +171,7 @@ def log_metrics(label_descs, top_n, rel_sim_by_label, oth_sim_by_label, precisio
             oth_sim_by_label[label_idx]
             ))
     logging.info("Total (avg): %.2f P@%d, %.2f rel sim, %.2f oth sim" % (
-            np.mean(precision_by_label), top_n,
+            np.sum(precision_by_label * (label_counts/np.sum(label_counts))), top_n,
             np.mean(rel_sim_by_label),
             np.mean(oth_sim_by_label)
         ))
@@ -198,34 +198,63 @@ def get_sorted_triplets(latents):
     return trio_keys, trio_dists
 
 
+def get_unique_samples(closest_idcs, closest_dists):
+    # sort distances globally
+    idx_dist_map = [
+        ([row, col], closest_dists[row, col])
+        for row in range(closest_dists.shape[0])
+        for col in range(closest_dists.shape[1])
+        if closest_dists[row, col] >= 0]
+    idx_dist_map = sorted(idx_dist_map, key=lambda el: el[1])
+
+    # go through samples in globally sorted order
+    sample_idcs = np.ones_like(closest_idcs, dtype=int) * -1
+    for seek, dist in idx_dist_map:
+        cur_idx = closest_idcs[seek[0], seek[1]]
+        # check if idx is already used for mean which it is closer to
+        if cur_idx in sample_idcs:
+            continue
+        # insert at leftmost position for appropriate class
+        sample_idcs[seek[0], np.where(sample_idcs[seek[0]] == -1)[0][0]] = cur_idx
+
+    return sample_idcs
+
+
 def gen_eval_task(mean_latents, latents, labels, num_examples, num_tasks):
     # get triplet of means with largest distance between them
     trio_keys, trio_dists = get_sorted_triplets(mean_latents)
     eval_trio, eval_trio_dist = trio_keys[0], trio_dists[0]
     logging.info("Calculated mean triplet %s with cumulative Euclidean distance %.2f." % (str(eval_trio), eval_trio_dist))
     # get samples which lie closest to respective means
-    trio_sample_idcs = np.zeros([3, num_examples + num_tasks], dtype=int)
+    closest_idcs = np.ones([3, latents.shape[0]], dtype=int) * -1
+    closest_dists = np.ones([3, latents.shape[0]]) * -1
     for tidx in range(3):
         # get indices of samples with same label as current mean
         if len(labels.shape) > 1:
             rel_idcs = np.squeeze(np.where(labels[:, eval_trio[tidx]] == 1.))
         else:
             rel_idcs = np.squeeze(np.where(labels == (eval_trio[tidx] * np.ones_like(labels))))
-        rel_latents = latents[rel_idcs]
         # get closest latents of same label per mean
-        closest_idcs, closest_dists = get_closest(mean_latents[eval_trio[tidx]], rel_latents)
-        trio_sample_idcs[tidx] = rel_idcs[closest_idcs[:num_examples + num_tasks]]
-        avg_dist = np.mean(closest_dists[:num_examples + num_tasks])
-        logging.info("Calculated %d samples for mean %d with average distance %.2f." % (trio_sample_idcs[tidx].shape[0], eval_trio[tidx], avg_dist))
-    # get examples
-    example_idcs = sorted(np.random.choice((num_examples + num_tasks), num_examples, replace=False))
+        cur_closest_idcs, cur_closest_dists = get_closest(mean_latents[eval_trio[tidx]], latents, rel_idcs)
+        closest_idcs[tidx, :cur_closest_idcs.shape[0]] = cur_closest_idcs
+        closest_dists[tidx, :cur_closest_dists.shape[0]] = cur_closest_dists
+    trio_sample_idcs = get_unique_samples(closest_idcs, closest_dists)
+    # avg_dist = np.mean(closest_dists[:num_examples + num_tasks])
+    # logging.info("Calculated %d samples for mean %d with average distance %.2f." % (trio_sample_idcs[tidx].shape[0], eval_trio[tidx], avg_dist))
+    # get examples (randomly choose from available data)
+    example_idcs = sorted(np.random.choice((num_examples + num_tasks + 1), num_examples, replace=False))
     examples = np.squeeze(trio_sample_idcs[:,example_idcs].flatten())
     examples = examples.tolist()
     trio_sample_idcs[:,example_idcs] = -1
+    # sanity check whether enough data is left for generating tasks
+    if (np.logical_or.reduce(np.sum(trio_sample_idcs >= 0, axis=-1) < num_tasks)):
+        logging.error("[Error] Not enough data to generate %d tasks based on:\n%s" % (num_tasks, trio_sample_idcs))
+        sys.exit()
     # get tasks
     task_idcs = np.where(trio_sample_idcs >= 0.)
-    task_trios = np.reshape(trio_sample_idcs[task_idcs], [3, num_tasks])
+    task_trios = np.reshape(trio_sample_idcs[task_idcs], [3, -1])
     task_trios = [task_trios[:, i].tolist() for i in range(num_tasks)]
+
     # randomly select truths for tasks
     tasks = []
     for trio in task_trios:

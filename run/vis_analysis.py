@@ -112,9 +112,9 @@ if __name__ == '__main__':
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
     logging.info("Calculating metrics...")
-    mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(latents, dataset.labels, sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
+    mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision, label_counts = calc_metrics(latents, dataset.labels, sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
-        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
+        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank], label_counts)
 
     logging.info("Exporting evaluation samples...")
     classes, examples, tasks = gen_eval_task(mean_latents, latents, dataset.labels, args.num_examples, args.num_tasks)
