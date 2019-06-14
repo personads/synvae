@@ -56,9 +56,9 @@ class Bam(Dataset):
 
 
     def filter_uncertain(self):
-        self.labels[(self.labels == .5)] = 0.
+        self.labels[(self.labels == .5)] = .51 # round up
         self.labels = np.around(self.labels)
-        logging.info("[BAM] Filtered uncertain values (set to 0).")
+        logging.info("[BAM] Filtered uncertain values (rounding up).")
 
 
     def filter_labels(self, keep_labels):
