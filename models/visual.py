@@ -16,13 +16,14 @@ class VisualVae(BaseModel):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epoch = 0
+        self._recon_loss_name = 'MSE'
         # set up computation graph
-        self.images = tf.placeholder(tf.float32, [self.batch_size, self.img_height, self.img_width, self.img_depth], name='images')
+        self.originals = tf.placeholder(tf.float32, [self.batch_size, self.img_height, self.img_width, self.img_depth], name='images')
 
 
     def __repr__(self):
         res  = '<%s: ' % self.__class__.__name__
-        res += str(self.images.shape[1:])
+        res += str(self.originals.shape[1:])
         res += ' -> %d (β=%s)' % (self.latent_dim, str(self.beta))
         res += ' -> ' + str(self.reconstructions.shape[1:])
         res += '>'
@@ -40,16 +41,16 @@ class VisualVae(BaseModel):
 
 
     def build(self):
-        self.latents, means, sigmas = self.build_encoder(self.images)
+        self.latents, means, sigmas = self.build_encoder(self.originals)
         self.reconstructions = self.build_decoder(self.latents)
         # set up loss
-        self.loss = self.calc_loss(self.images, self.reconstructions, means, sigmas)
+        self.loss = self.calc_loss(self.originals, self.reconstructions, means, sigmas)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
         self.train_op = self.optimizer.minimize(self.loss)
         # debug info
-        tf.summary.image('Originals', self.images, max_outputs=4)
+        tf.summary.image('Originals', self.originals, max_outputs=4)
         tf.summary.image('Reconstructions', self.reconstructions, max_outputs=4)
         tf.summary.scalar('Loss', self.loss)
         logging.info(self)
@@ -80,14 +81,14 @@ class VisualVae(BaseModel):
 
 
     def run_train_step(self, tf_session, batch):
-        _, loss, recon_loss, latent_loss, summaries = tf_session.run([self.train_op, self.loss, self.recon_loss, self.latent_loss, self.merge_op], feed_dict={self.images: batch})
-        losses = {'All': loss, 'MSE': recon_loss, 'KL': latent_loss}
+        _, loss, recon_loss, latent_loss, summaries = tf_session.run([self.train_op, self.loss, self.recon_loss, self.latent_loss, self.merge_op], feed_dict={self.originals: batch})
+        losses = {'All': loss, self._recon_loss_name: recon_loss, 'KL': latent_loss}
         return losses, summaries
 
 
     def run_test_step(self, tf_session, batch, batch_idx, out_path, export_step=5):
-        loss, recon_loss, latent_loss, reconstructions = tf_session.run([self.loss, self.recon_loss, self.latent_loss, self.reconstructions], feed_dict={self.images: batch})
-        losses = {'All': loss, 'MSE': recon_loss, 'KL': latent_loss}
+        loss, recon_loss, latent_loss, reconstructions = tf_session.run([self.loss, self.recon_loss, self.latent_loss, self.reconstructions], feed_dict={self.originals: batch})
+        losses = {'All': loss, self._recon_loss_name: recon_loss, 'KL': latent_loss}
         # save original image and reconstruction
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
             self.vis_model.export_results(batch, reconstructions, out_path, batch_idx, epoch_idx=self.epoch)

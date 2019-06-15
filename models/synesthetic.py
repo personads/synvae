@@ -15,13 +15,13 @@ class SynestheticVae(BaseModel):
         self.epoch = 0
         self.export_step = 5
         # set up computation graph placeholders
-        self.images = self.vis_model.images
+        self.originals = self.vis_model.originals
         self.temperature = self.aud_model.temperature
 
 
     def __repr__(self):
         res  = '<SynestheticVae: '
-        res += str(self.images.shape[1:])
+        res += str(self.originals.shape[1:])
         res += ' -> %s (β=%s)' % (str(self.vis_latents.shape[1]), str(self.vis_model.beta))
         res += ' -> ♪ (%d steps)' % self.aud_model.music_length
         res += ' -> ' + str(self.aud_latents.shape[1])
@@ -30,10 +30,11 @@ class SynestheticVae(BaseModel):
         return res
 
 
-    def build_encoder(self, images):
+    def build_encoder(self, originals):
         # visual encoding step
         with tf.variable_scope('visual_vae_encoder'):
-            vis_latents, vis_means, vis_sigmas = self.vis_model.build_encoder(images)
+            vis_latents, vis_means, vis_sigmas = self.vis_model.build_encoder(originals)
+            print("vis_latents:", vis_latents.shape)
         # audio decoding step
         with tf.variable_scope('music_vae_decoder'):
             audios, lengths = self.aud_model.build_decoder(vis_latents)
@@ -55,20 +56,20 @@ class SynestheticVae(BaseModel):
         with tf.variable_scope('music_vae_core'):
             self.aud_model.build_core()
         # set up synesthetic encoder and decoder
-        self.audios, self.aud_lengths, self.vis_latents, self.vis_means, self.vis_sigmas = self.build_encoder(self.images)
+        self.audios, self.aud_lengths, self.vis_latents, self.vis_means, self.vis_sigmas = self.build_encoder(self.originals)
         self.reconstructions, self.aud_latents, self.aud_dist = self.build_decoder(self.audios, self.aud_lengths)
         # only get variables relevant to visual vae
         self.train_variables = tf.trainable_variables(scope='visual_vae')
         self.fixed_variables = [var for var in tf.trainable_variables() if var not in self.train_variables]
         # set up loss calculation
         with tf.name_scope('loss'):
-            self.loss = self.vis_model.calc_loss(self.images, self.reconstructions, self.vis_means, self.vis_sigmas)
+            self.loss = self.vis_model.calc_loss(self.originals, self.reconstructions, self.vis_means, self.vis_sigmas)
         # set up optimizer
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
         # set up training operation
         self.train_op = self.optimizer.minimize(self.loss, var_list=self.train_variables)
         # debug info
-        tf.summary.image('Originals', self.images, max_outputs=4)
+        tf.summary.image('Originals', self.originals, max_outputs=4)
         tf.summary.image('Reconstructions', self.reconstructions, max_outputs=4)
         tf.summary.scalar('Loss', self.loss)
         logging.info(self)
@@ -105,16 +106,30 @@ class SynestheticVae(BaseModel):
 
 
     def run_train_step(self, tf_session, batch):
-        temperature = 1.0
-        _, loss, recon_loss, latent_loss, summaries = tf_session.run([self.train_op, self.loss, self.vis_model.recon_loss, self.vis_model.latent_loss, self.merge_op], feed_dict={self.images: batch, self.temperature: temperature})
-        losses = {'All': loss, 'MSE': recon_loss, 'KL': latent_loss}
+        feed_dict = {
+            self.originals: batch,
+            self.temperature: 1.0
+        }
+        if hasattr(self.vis_model, 'tf_epoch'): feed_dict[self.vis_model.tf_epoch] = self.epoch
+
+        _, loss, recon_loss, latent_loss, summaries = tf_session.run([self.train_op, self.loss, self.vis_model.recon_loss, self.vis_model.latent_loss, self.merge_op], feed_dict=feed_dict)
+
+        if hasattr(self.vis_model, 'beta_hl'): loss = recon_loss + self.beta * latent_loss
+        losses = {'All': loss, self.vis_model._recon_loss_name: recon_loss, 'KL': latent_loss}
         return losses, summaries
 
 
     def run_test_step(self, tf_session, batch, batch_idx, out_path):
-        temperature = 0.5
-        loss, recon_loss, latent_loss, audios, reconstructions = tf_session.run([self.loss, self.vis_model.recon_loss, self.vis_model.latent_loss, self.audios, self.reconstructions], feed_dict={self.images: batch, self.temperature: temperature})
-        losses = {'All': loss, 'MSE': recon_loss, 'KL': latent_loss}
+        feed_dict = {
+            self.originals: batch,
+            self.temperature: 0.5
+        }
+        if hasattr(self.vis_model, 'tf_epoch'): feed_dict[self.vis_model.tf_epoch] = self.epoch
+        
+        loss, recon_loss, latent_loss, audios, reconstructions = tf_session.run([self.loss, self.vis_model.recon_loss, self.vis_model.latent_loss, self.audios, self.reconstructions], feed_dict=feed_dict)
+
+        if hasattr(self.vis_model, 'beta_hl'): loss = recon_loss + self.beta * latent_loss
+        losses = {'All': loss, self.vis_model._recon_loss_name: recon_loss, 'KL': latent_loss}
         # save original image and reconstruction
         if (self.export_step > 0) and ((batch_idx-1) % self.export_step == 0):
             self.vis_model.export_results(batch, reconstructions, out_path, batch_idx, epoch_idx=self.epoch)

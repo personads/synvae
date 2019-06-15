@@ -8,6 +8,7 @@ import tensorflow as tf
 
 from data import *
 from models.visual import *
+from models.textual import *
 from models.auditive import MusicVae
 from models.synesthetic import SynestheticVae
 from utils.experiments import *
@@ -35,6 +36,9 @@ if __name__ == '__main__':
     elif args.task == 'bam':
         visual_vae = BamVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
         dataset = Bam(args.data_path)
+    elif args.task == 'sarc':
+        dataset = Sarc(data_path=args.data_path)
+        visual_vae = SarcVae(idx_tkn_map=dataset.idx_tkn_map, max_length=dataset.max_length, latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size) # "visual"
     # set up synesthetic model
     model = SynestheticVae(visual_model=visual_vae, auditive_model=music_vae, learning_rate=1e-3)
     model.build()

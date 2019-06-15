@@ -17,14 +17,16 @@ class TextualVae(BaseModel):
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epoch = 0
+        self._recon_loss_name = 'SeqXE'
         # init placeholders
-        self.texts = tf.placeholder(tf.int64, [self.batch_size, self.max_length], name='texts')
+        self.originals = tf.placeholder(tf.int64, [self.batch_size, self.max_length], name='texts')
+        self.decoder_inputs = self.originals[:, :-1] # no end token
         self.tf_epoch = tf.placeholder(tf.int32, [], name='epoch')
 
 
     def __repr__(self):
         res  = '<%s: ' % self.__class__.__name__
-        res += str(self.texts.shape[1:])
+        res += str(self.originals.shape[1:])
         res += ' -> %d (β=%s)' % (self.latent_dim, str(self.beta))
         res += ' -> ' + str(self.reconstructions.shape[1:])
         res += '>'
@@ -32,12 +34,8 @@ class TextualVae(BaseModel):
     
 
     def build(self):
-        self.encoder_inputs = self.texts[:, 1:] # no start token
-        self.decoder_inputs = self.texts[:, :-1] # no end token
-
         # build encoder components
-        encoder_embeddings = self.build_embedding(self.encoder_inputs)
-        self.latents, means, sigmas = self.build_encoder(encoder_embeddings) # (batch_size, max_length-1, latent_dim)
+        self.latents, means, sigmas = self.build_encoder(self.originals) # (batch_size, max_length-1, latent_dim)
         self.means, self.sigmas = means, sigmas
 
         # build decoder components
@@ -45,16 +43,17 @@ class TextualVae(BaseModel):
         self.reconstructions = recon_logits
 
         # build training components
-        self.loss_weighted = self.calc_loss(self.encoder_inputs, recon_logits, means, sigmas)
+        self.loss_op = self.calc_loss(self.originals, recon_logits, means, sigmas)
         self.loss = self.recon_loss + self.beta * self.latent_loss #  actual loss to export
         self.optimizer = tf.train.AdamOptimizer(self.learning_rate)
-        self.train_op = self.optimizer.minimize(self.loss_weighted)
+        self.train_op = self.optimizer.minimize(self.loss_op)
 
         logging.info(self)
 
 
     def calc_loss(self, originals, recon_logits, means, sigmas):
         # Reconstruction loss over sequence
+        originals = originals[:, 1:] # no start token
         padding_mask = tf.cast(tf.math.logical_not(tf.math.equal(originals, 0)), dtype=tf.float32)
         self.recon_loss = tf.reduce_sum(tf.contrib.seq2seq.sequence_loss(logits=recon_logits, targets=originals, weights=padding_mask, average_across_timesteps=False))
         # KL divergence
@@ -80,23 +79,23 @@ class TextualVae(BaseModel):
         return positional_embeddings
 
 
-    def build_encoder(self, encoder_embeddings):
+    def build_encoder(self, texts):
         pass
 
 
-    def build_decoder(self, decoder_embeddings, latents):
+    def build_decoder(self, latents):
         pass
 
 
     def run_train_step(self, tf_session, batch):
-        _, loss, recon_loss, latent_loss, means, sigmas, bw = tf_session.run([self.train_op, self.loss, self.recon_loss, self.latent_loss, self.means, self.sigmas, self.bw], feed_dict={self.texts: batch, self.tf_epoch: self.epoch})
-        losses = {'All': loss, 'SeqXE': recon_loss, 'KL': latent_loss, 'm': np.mean(means), 's': np.mean(sigmas), 'bw': bw}
+        _, loss, recon_loss, latent_loss, means, sigmas, bw = tf_session.run([self.train_op, self.loss, self.recon_loss, self.latent_loss, self.means, self.sigmas, self.bw], feed_dict={self.originals: batch, self.tf_epoch: self.epoch})
+        losses = {'All': loss, self._recon_loss_name: recon_loss, 'KL': latent_loss, 'm': np.mean(means), 's': np.mean(sigmas), 'bw': bw}
         return losses, None
 
 
     def run_test_step(self, tf_session, batch, batch_idx, out_path, export_step=5):
-        loss, recon_loss, latent_loss, reconstructions, means, sigmas = tf_session.run([self.loss, self.recon_loss, self.latent_loss, self.reconstructions, self.means, self.sigmas], feed_dict={self.texts: batch, self.tf_epoch: self.epoch})
-        losses = {'All': loss, 'SeqXE': recon_loss, 'KL': latent_loss, 'means': np.mean(means), 'sigmas': np.mean(sigmas)}
+        loss, recon_loss, latent_loss, reconstructions, means, sigmas = tf_session.run([self.loss, self.recon_loss, self.latent_loss, self.reconstructions, self.means, self.sigmas], feed_dict={self.originals: batch, self.tf_epoch: self.epoch})
+        losses = {'All': loss, self._recon_loss_name: recon_loss, 'KL': latent_loss, 'means': np.mean(means), 'sigmas': np.mean(sigmas)}
         # save original texts and reconstructions
         if (export_step > 0) and ((batch_idx-1) % export_step == 0):
             self.export_results(batch, reconstructions, out_path, batch_idx)
@@ -142,7 +141,7 @@ class SarcVae(TextualVae):
         super().__init__(idx_tkn_map=idx_tkn_map, max_length=max_length, latent_dim=latent_dim, beta=beta, batch_size=batch_size, learning_rate=1e-4, beta_half_life=10)
 
 
-    def build_encoder(self, encoder_embeddings):
+    def build_encoder(self, texts):
         encoder = transformer.Encoder(
                  num_layers=4,
                  num_heads=4,
@@ -150,6 +149,9 @@ class SarcVae(TextualVae):
                  value_dim=32,
                  latent_dim=self.latent_dim,
                  ffn_dim=32)
+
+        encoder_inputs = texts[:, 1:] # no start token
+        encoder_embeddings = self.build_embedding(encoder_inputs)
         encoder_outputs = encoder.build(encoder_embeddings)
 
         # build VAE components with reparametrization
@@ -157,6 +159,9 @@ class SarcVae(TextualVae):
         sigmas = tf.keras.layers.Dense(self.latent_dim)(encoder_outputs)
         epsilons = tf.random.normal([self.batch_size, self.max_length-1, self.latent_dim], mean=0., stddev=1.)
         latents = means + tf.exp(.5 * sigmas) * epsilons # (batch_size, max_length-1, latent_dim)
+
+        # reduce latents over sentence to mean (necessary for MusicVAE compatibility
+        latents = tf.reduce_mean(latents, axis=1) # (batch_size, latent_dim)
 
         return latents, means, sigmas
 
@@ -172,6 +177,9 @@ class SarcVae(TextualVae):
                      ffn_dim=32)
 
             decoder_embeddings = self.build_embedding(self.decoder_inputs) # enforce information bottleneck
+            # replicate latent vector over sentence
+            latents = tf.tile(latents, [1, self.max_length-1]) # (batch_size, latent_dim * (max_length-1))
+            latents = tf.reshape(latents, [-1, self.max_length-1, self.latent_dim]) # (batch_size, max_length, latent_dim)
             decoder_outputs = decoder.build(decoder_embeddings, latents)
             recon_logits = tf.layers.dense(decoder_outputs, self.vocab_size) # (batch_size, max_length-1, vocab_size)
         return recon_logits
