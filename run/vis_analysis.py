@@ -66,7 +66,7 @@ if __name__ == '__main__':
 
         # encode in batches
         
-        reconstructions, latents = None, None
+        images, reconstructions, latents = None, None, None
         # iterate over batches
         avg_loss = 0.
         avg_mse = 0.
@@ -83,15 +83,18 @@ if __name__ == '__main__':
                 avg_mse = ((avg_mse * (batch_idx - 1)) + cur_mse) / batch_idx
                 avg_kl = ((avg_kl * (batch_idx - 1)) + cur_kl) / batch_idx
                 # append to result
-                if (reconstructions is None) or (latents is None):
-                    reconstructions, latents = cur_recons, cur_latents
+                if (images is None) or (reconstructions is None) or (latents is None):
+                    images, reconstructions, latents = batch, cur_recons, cur_latents
                 else:
+                    images = np.concatenate((images, batch), axis=0)
                     reconstructions = np.concatenate((reconstructions, cur_recons), axis=0)
                     latents = np.concatenate((latents, cur_latents), axis=0)
             # end of dataset
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch
                 break
+    # truncate labels to match number of latents with potentially dropped last batch
+    dataset.labels = dataset.labels[:latents.shape[0]]
     logging.info("\rEncoded %d batches with average losses (All: %.2f | MSE: %.2f | KL: %.2f), %d reconstructions and %d latent vectors." % (batch_idx, avg_loss, avg_mse, avg_kl, reconstructions.shape[0], latents.shape[0]))
 
     if args.export:
@@ -104,6 +107,7 @@ if __name__ == '__main__':
         logging.info("\rSaved %d images and reconstructions to '%s'." % (images.shape[0], args.out_path))
         np.save(os.path.join(args.out_path, 'latents.npy'), latents)
         logging.info("Saved %d latent vectors to '%s'." % (latents.shape[0], os.path.join(args.out_path, 'latents.npy')))
+    images, reconstructions = None, None
 
     logging.info("Calculating similarities...")
     sims = calc_dists(latents)

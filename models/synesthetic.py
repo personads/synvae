@@ -68,8 +68,6 @@ class SynestheticVae(BaseModel):
         # set up training operation
         self.train_op = self.optimizer.minimize(self.loss, var_list=self.train_variables)
         # debug info
-        tf.summary.image('Originals', self.images, max_outputs=4)
-        tf.summary.image('Reconstructions', self.reconstructions, max_outputs=4)
         tf.summary.scalar('Loss', self.loss)
         logging.info(self)
 

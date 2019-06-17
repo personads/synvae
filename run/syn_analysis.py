@@ -11,7 +11,7 @@ from collections import defaultdict
 from data import *
 from utils.analysis import *
 from utils.experiments import *
-from models.visual import MnistVae, CifarVae
+from models.visual import *
 from models.auditive import MusicVae
 from models.synesthetic import SynestheticVae
 
@@ -53,6 +53,8 @@ if __name__ == '__main__':
     elif args.task == 'bam':
         visual_vae = BamVae(latent_dim=music_vae.latent_dim, beta=args.beta, batch_size=args.batch_size)
         dataset = Bam(args.data_path)
+        dataset.filter_labels(['emotion_gloomy', 'emotion_happy', 'emotion_peaceful', 'emotion_scary'])
+        dataset.filter_uncertain()
     # set up synesthetic model
     model = SynestheticVae(visual_model=visual_vae, auditive_model=music_vae, learning_rate=1e-4)
     model.build()
@@ -70,7 +72,7 @@ if __name__ == '__main__':
         model.restore(tf_session=sess, path=args.model_path)
 
         # encode in batches
-        audios, reconstructions, vis_latents, aud_latents = None, None, None, None
+        vis_latents, aud_latents = None, None
         avg_loss = 0.
         avg_mse = 0.
         avg_kl = 0.
@@ -97,28 +99,29 @@ if __name__ == '__main__':
                 avg_mse = ((avg_mse * (batch_idx - 1)) + cur_mse) / batch_idx
                 avg_kl = ((avg_kl * (batch_idx - 1)) + cur_kl) / batch_idx
                 if batch_idx == 1:
-                    audios, reconstructions, vis_latents, aud_latents = cur_audios, cur_recons, cur_vis_latents, cur_aud_latents
+                    vis_latents, aud_latents = cur_vis_latents, cur_aud_latents
                 else:
-                    audios = np.concatenate((audios, cur_audios), axis=0)
-                    reconstructions = np.concatenate((reconstructions, cur_recons), axis=0)
                     vis_latents = np.concatenate((vis_latents, cur_vis_latents), axis=0)
                     aud_latents = np.concatenate((aud_latents, cur_aud_latents), axis=0)
+
+                if args.export:
+                    for idx in range(batch.shape[0]):
+                        data_idx = ((batch_idx - 1) * args.batch_size) + idx
+                        model.vis_model.save_image(batch[idx].squeeze(), os.path.join(args.out_path, str(data_idx) + '_orig.png'))
+                        model.vis_model.save_image(cur_recons[idx].squeeze(), os.path.join(args.out_path, str(data_idx) + '_recon.png'))
+                        model.aud_model.save_midi(cur_audios[idx], os.path.join(args.out_path, str(data_idx) + '_audio.mid'))
             # end of dataset
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch
                 break
-    logging.info("\rEncoded %d batches with average losses (All: %.2f | MSE: %.2f | KL: %.2f), %d audios, %d reconstructions, %d visual latent vectors and %d auditive latent vectors."
-        % (batch_idx, avg_loss, avg_mse, avg_kl, audios.shape[0], reconstructions.shape[0], vis_latents.shape[0], aud_latents.shape[0]))
+    dataset.labels = dataset.labels[:vis_latents.shape[0]]
+    logging.info("\rEncoded %d batches with average losses (All: %.2f | %s: %.2f | KL: %.2f), %d visual latent vectors and %d auditive latent vectors."
+        % (batch_idx, avg_loss, 'MSE', avg_mse, avg_kl, vis_latents.shape[0], aud_latents.shape[0]))
 
     if args.export:
-        logging.info("Saving outputs...")
-        for idx in range(images.shape[0]):
-            model.vis_model.save_image(images[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_orig.png'))
-            model.vis_model.save_image(reconstructions[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_recon.png'))
-            model.aud_model.save_midi(audios[idx], os.path.join(args.out_path, str(idx) + '_audio.mid'))
-            sys.stdout.write("\rSaved %d/%d (%.2f%%)..." % (idx+1, images.shape[0], ((idx+1)*100)/images.shape[0]))
-            sys.stdout.flush()
-        logging.info("\rSaved %d images, audios and reconstructions." % images.shape[0])
+        np.save(os.path.join(args.out_path, 'aud_latents.npy'), aud_latents)
+        np.save(os.path.join(args.out_path, 'vis_latents.npy'), vis_latents)
+        logging.info("\rSaved %d images, audios and reconstructions as well as auditive and visual latent vectors." % originals.shape[0])
 
     if args.kl:
         logging.info("Calculating KL divergence between latents (perplexity: %d)..." % args.perplexity)
@@ -132,11 +135,11 @@ if __name__ == '__main__':
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
     logging.info("Calculating metrics for visual latents...")
-    vis_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(vis_latents, labels, vis_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
+    vis_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision, label_counts = calc_metrics(vis_latents, dataset.labels, vis_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
-        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
+        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank], label_counts)
 
     logging.info("Calculating metrics for auditive latents...")
-    aud_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision = calc_metrics(aud_latents, labels, aud_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
+    aud_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision, label_counts = calc_metrics(aud_latents, dataset.labels, aud_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
-        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank])
+        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank], label_counts)
