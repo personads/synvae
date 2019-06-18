@@ -138,7 +138,7 @@ class TextualVae(BaseModel):
 
 class SarcVae(TextualVae):
     def __init__(self, idx_tkn_map, max_length, latent_dim, beta, batch_size):
-        super().__init__(idx_tkn_map=idx_tkn_map, max_length=max_length, latent_dim=latent_dim, beta=beta, batch_size=batch_size, learning_rate=1e-4, beta_half_life=10)
+        super().__init__(idx_tkn_map=idx_tkn_map, max_length=max_length, latent_dim=latent_dim, beta=beta, batch_size=batch_size, learning_rate=1e-4, beta_half_life=20)
 
 
     def build_encoder(self, texts):

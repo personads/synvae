@@ -12,6 +12,7 @@ class SynestheticVae(BaseModel):
         self.aud_model = auditive_model
         self.latent_dim = self.aud_model.latent_dim
         self.learning_rate = learning_rate
+        self.beta = self.vis_model.beta
         self.epoch = 0
         self.export_step = 5
         # set up computation graph placeholders
@@ -34,7 +35,6 @@ class SynestheticVae(BaseModel):
         # visual encoding step
         with tf.variable_scope('visual_vae_encoder'):
             vis_latents, vis_means, vis_sigmas = self.vis_model.build_encoder(originals)
-            print("vis_latents:", vis_latents.shape)
         # audio decoding step
         with tf.variable_scope('music_vae_decoder'):
             audios, lengths = self.aud_model.build_decoder(vis_latents)
@@ -69,8 +69,6 @@ class SynestheticVae(BaseModel):
         # set up training operation
         self.train_op = self.optimizer.minimize(self.loss, var_list=self.train_variables)
         # debug info
-        tf.summary.image('Originals', self.originals, max_outputs=4)
-        tf.summary.image('Reconstructions', self.reconstructions, max_outputs=4)
         tf.summary.scalar('Loss', self.loss)
         logging.info(self)
 
@@ -114,7 +112,7 @@ class SynestheticVae(BaseModel):
 
         _, loss, recon_loss, latent_loss, summaries = tf_session.run([self.train_op, self.loss, self.vis_model.recon_loss, self.vis_model.latent_loss, self.merge_op], feed_dict=feed_dict)
 
-        if hasattr(self.vis_model, 'beta_hl'): loss = recon_loss + self.beta * latent_loss
+        if hasattr(self.vis_model, 'beta_half_life'): loss = recon_loss + self.beta * latent_loss
         losses = {'All': loss, self.vis_model._recon_loss_name: recon_loss, 'KL': latent_loss}
         return losses, summaries
 
