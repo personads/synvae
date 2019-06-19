@@ -1,7 +1,7 @@
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import logging, multiprocessing, random
+import logging, math, multiprocessing, random
 
 import numpy as np
 import tensorflow as tf
@@ -19,9 +19,19 @@ def calc_sims(latents):
     sims = dot_mat / mlt_mat
     return sims
 
-def calc_dists(latents):
+def calc_dists(latents, split=10000):
     '''Calculate pairwise Euclidean distances'''
-    return sklearn.metrics.pairwise_distances(latents, latents, metric='euclidean', n_jobs=multiprocessing.cpu_count())
+    # split high memory load
+    if latents.shape[0] > split:
+        dists = np.zeros([latents.shape[0], latents.shape[0]])
+        for i in range(math.ceil(latents.shape[0]/split)):
+            start_idx, end_idx = (i * split), ((i + 1) * split)
+            subset = latents[start_idx:end_idx]
+            dists[start_idx:end_idx] = sklearn.metrics.pairwise_distances(subset, latents, metric='euclidean', n_jobs=multiprocessing.cpu_count())
+    # otherwise, calculate in one go
+    else:
+        dists = sklearn.metrics.pairwise_distances(latents, latents, metric='euclidean', n_jobs=multiprocessing.cpu_count())
+    return dists
 
 
 def get_closest(centroid, latents, rel_idcs):
