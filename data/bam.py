@@ -55,8 +55,8 @@ class Bam(Dataset):
         return train_images, train_labels, valid_images, valid_labels
 
 
-    def filter_uncertain(self):
-        self.labels[(self.labels == .5)] = .51 # round up
+    def filter_uncertain(self, round_up=True):
+        self.labels[(self.labels == .5)] = .51 if round_up else 0.
         self.labels = np.around(self.labels)
         logging.info("[BAM] Filtered uncertain values (rounding up).")
 
@@ -65,6 +65,29 @@ class Bam(Dataset):
         keep_cols, self.label_descs = zip(*[(i, l) for i, l in enumerate(self.label_descs) if l in keep_labels])
         self.labels = self.labels[:, keep_cols]
         logging.info("[BAM] Filtered dataset labels to '%s' (%d labels)." % (self.label_descs, self.labels.shape[1]))
+
+
+    def make_multiclass(self):
+        unique_class_ids = {}
+        mltcls_labels = np.zeros(self.labels.shape[0])
+        for i in range(self.labels.shape[0]):
+            class_id = ''.join([l for l in self.labels[i]])
+            # check if new class_id
+            if class_id not in unique_class_ids:
+                unique_class_ids[class_id] = len(unique_class_ids)
+            class_idx = unique_class_ids[class_id]
+            # convert to new label
+            mltcls_labels[i] = class_idx
+        # set labels to multiclass
+        self.labels = mltcls_labels
+        # set label description
+        mltcls_label_descs = ['' for _ in range(len(unique_class_ids))]
+        for class_id in unique_class_ids:
+            class_idx = unique_class_ids[class_id]
+            class_desc = '+'.join([self.label_descs[l] for l, v in enumerate(class_id) if float(l) >= 0.5]) # e.g. 'emotion_happy+emotion_peaceful'
+            mltcls_label_descs[class_idx] = class_desc
+        self.label_descs = mltcls_label_descs
+        logging.info("[BAM] Converted labels to %d distinct classes %s." % (len(self.label_descs), self.label_descs))
 
 
     def get_iterator(self, batch_size):

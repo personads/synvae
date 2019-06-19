@@ -1,7 +1,7 @@
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import json, logging
+import logging
 
 import numpy as np
 import tensorflow as tf
@@ -24,8 +24,6 @@ if __name__ == '__main__':
     arg_parser.add_argument('--beta', type=float, default=1., help='beta parameter for weighting KL-divergence (default: 1.0)')
     arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size (default: 200)')
     arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default: "1,5,10")')
-    arg_parser.add_argument('--num_examples', default=4, help='number of examples for evaluation (default: 4)')
-    arg_parser.add_argument('--num_tasks', default=20, help='number of tasks for evaluation (default: 20)')
     arg_parser.add_argument('--export', action='store_true', help='export original samples and reconstructions')
     args = arg_parser.parse_args()
 
@@ -119,19 +117,3 @@ if __name__ == '__main__':
     mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision, label_counts = calc_metrics(latents, dataset.labels, sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
         log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank], label_counts)
-
-    logging.info("Exporting evaluation samples...")
-    classes, examples, tasks = gen_eval_task(mean_latents, latents, dataset.labels, args.num_examples, args.num_tasks)
-    eval_config = OrderedDict([
-        ('name', args.task.upper()),
-        ('code', ''),
-        ('data_path', ''),
-        ('result_path', ''),
-        ('classes', [dataset.label_descs[l] for l in classes]),
-        ('examples', examples),
-        ('tasks', tasks)
-    ])
-    eval_config_path = os.path.join(args.out_path, 'eval.json')
-    with open(eval_config_path, 'w', encoding='utf8') as fop:
-        json.dump(eval_config, fop)
-    logging.info("Saved evaluation configuration with %d examples and %d tasks to '%s'." % (len(examples), len(tasks), eval_config_path))
