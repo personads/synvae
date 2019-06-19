@@ -1,14 +1,14 @@
 import sys, os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
-import logging, random
+import logging, multiprocessing, random
 
 import numpy as np
 import tensorflow as tf
+import sklearn
 import sklearn.manifold.t_sne as tsne
 
 from collections import defaultdict, OrderedDict
-from scipy.spatial.distance import pdist, squareform
 
 
 def calc_sims(latents):
@@ -21,7 +21,7 @@ def calc_sims(latents):
 
 def calc_dists(latents):
     '''Calculate pairwise Euclidean distances'''
-    return squareform(pdist(latents, 'euclidean'))
+    return sklearn.metrics.pairwise_distances(latents, latents, metric='euclidean', n_jobs=multiprocessing.cpu_count())
 
 
 def get_closest(centroid, latents, rel_idcs):
