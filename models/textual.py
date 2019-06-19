@@ -20,7 +20,6 @@ class TextualVae(BaseModel):
         self._recon_loss_name = 'SeqXE'
         # init placeholders
         self.originals = tf.placeholder(tf.int32, [self.batch_size, self.max_length], name='texts')
-        self.embeddings = tf.Variable(tf.random_uniform([self.vocab_size, self.latent_dim]), name='embeddings')
         # self.decoder_inputs = self.originals[:, :-1] # no end token
         self.tf_epoch = tf.placeholder(tf.int32, [], name='epoch')
 
@@ -130,6 +129,7 @@ class SarcVae(TextualVae):
 
 
     def build_encoder(self, texts):
+        self.embeddings = tf.Variable(tf.random_uniform([self.vocab_size, self.latent_dim]), name='embeddings')
         encoder_embeddings = tf.nn.embedding_lookup(self.embeddings, texts)
 
         fw_cell = tf.contrib.rnn.GRUCell(num_units=1024)
