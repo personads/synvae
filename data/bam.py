@@ -69,26 +69,30 @@ class Bam(Dataset):
 
     def make_multiclass(self):
         unique_class_ids = {}
-        mltcls_labels = np.zeros(self.labels.shape[0])
+        mltcls_labels = np.zeros(self.labels.shape[0], dtype=int)
+        mltcls_counter = {}
         for i in range(self.labels.shape[0]):
-            class_id = ''.join([l for l in self.labels[i]])
+            class_id = '/'.join([str(l) for l in self.labels[i]])
             # check if new class_id
             if class_id not in unique_class_ids:
                 unique_class_ids[class_id] = len(unique_class_ids)
             class_idx = unique_class_ids[class_id]
             # convert to new label
             mltcls_labels[i] = class_idx
+            mltcls_counter[class_idx] = mltcls_counter.get(class_idx, 0) + 1
         # set labels to multiclass
         self.labels = mltcls_labels
         # set label description
         mltcls_label_descs = ['' for _ in range(len(unique_class_ids))]
         for class_id in unique_class_ids:
             class_idx = unique_class_ids[class_id]
-            class_desc = '+'.join([self.label_descs[l] for l, v in enumerate(class_id) if float(l) >= 0.5]) # e.g. 'emotion_happy+emotion_peaceful'
+            class_desc = '+'.join([self.label_descs[l] for l, v in enumerate(class_id.split('/')) if float(v) >= 0.5]) # e.g. 'emotion_happy+emotion_peaceful'
+            if len(class_desc) < 1: class_desc = 'unspecified'
             mltcls_label_descs[class_idx] = class_desc
         self.label_descs = mltcls_label_descs
-        logging.info("[BAM] Converted labels to %d distinct classes %s." % (len(self.label_descs), self.label_descs))
-
+        logging.info("[BAM] Converted labels to %d distinct classes:" % (len(self.label_descs),))
+        for li, desc in enumerate(self.label_descs):
+            logging.info("  '%s': %d (%.2f%%)" % (desc, mltcls_counter[li], (mltcls_counter[li] * 100)/self.labels.shape[0]))
 
     def get_iterator(self, batch_size):
         paths = tf.data.Dataset.from_tensor_slices({'images': self.data, 'labels': self.labels})

@@ -29,7 +29,8 @@ if __name__ == '__main__':
     arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default: "1,5,10")')
     arg_parser.add_argument('--kl', action='store_true', help='compute approximate audio-visual KL-divergence')
     arg_parser.add_argument('--perplexity', type=int, default=30, help='perplexity of distributions used to approximate the data space (default: 30)')
-    arg_parser.add_argument('--export', action='store_true', help='export original samples and reconstructions')
+    arg_parser.add_argument('--export_data', action='store_true', help='export original samples and reconstructions')
+    arg_parser.add_argument('--export_latents', action='store_true', help='export latent vectors')
     args = arg_parser.parse_args()
 
     # check if directory already exists
@@ -55,6 +56,7 @@ if __name__ == '__main__':
         dataset = Bam(args.data_path)
         dataset.filter_labels(['emotion_gloomy', 'emotion_happy', 'emotion_peaceful', 'emotion_scary'])
         dataset.filter_uncertain()
+        dataset.make_multiclass()
     # set up synesthetic model
     model = SynestheticVae(visual_model=visual_vae, auditive_model=music_vae, learning_rate=1e-4)
     model.build()
@@ -104,10 +106,10 @@ if __name__ == '__main__':
                     vis_latents = np.concatenate((vis_latents, cur_vis_latents), axis=0)
                     aud_latents = np.concatenate((aud_latents, cur_aud_latents), axis=0)
 
-                if args.export:
+                if args.export_data:
                     for idx in range(batch.shape[0]):
                         data_idx = ((batch_idx - 1) * args.batch_size) + idx
-                        model.vis_model.save_image(batch[idx].squeeze(), os.path.join(args.out_path, str(data_idx) + '_orig.png'))
+                        # model.vis_model.save_image(batch[idx].squeeze(), os.path.join(args.out_path, str(data_idx) + '_orig.png'))
                         model.vis_model.save_image(cur_recons[idx].squeeze(), os.path.join(args.out_path, str(data_idx) + '_recon.png'))
                         model.aud_model.save_midi(cur_audios[idx], os.path.join(args.out_path, str(data_idx) + '_audio.mid'))
             # end of dataset
@@ -118,28 +120,32 @@ if __name__ == '__main__':
     logging.info("\rEncoded %d batches with average losses (All: %.2f | %s: %.2f | KL: %.2f), %d visual latent vectors and %d auditive latent vectors."
         % (batch_idx, avg_loss, 'MSE', avg_mse, avg_kl, vis_latents.shape[0], aud_latents.shape[0]))
 
-    if args.export:
+    if args.export_latents:
         np.save(os.path.join(args.out_path, 'aud_latents.npy'), aud_latents)
         np.save(os.path.join(args.out_path, 'vis_latents.npy'), vis_latents)
-        logging.info("\rSaved %d images, audios and reconstructions as well as auditive and visual latent vectors." % originals.shape[0])
+        logging.info("\rSaved %d auditive and visual latent vectors." % aud_latents.shape[0])
 
     if args.kl:
         logging.info("Calculating KL divergence between latents (perplexity: %d)..." % args.perplexity)
         kl_va, kl_av = calc_latent_kl(vis_latents, aud_latents, perplexity=args.perplexity)
 
-    logging.info("Calculating similarities...")
-    vis_sims = calc_dists(vis_latents)
-    aud_sims = calc_dists(aud_latents)
-
     # parse precision ranks
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
+    logging.info("Calculating visual similarities...")
+    vis_sims = calc_dists(vis_latents)
+
     logging.info("Calculating metrics for visual latents...")
     vis_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision, label_counts = calc_metrics(vis_latents, dataset.labels, vis_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
+    vis_latents, vis_sims = None, None # deallocate memory
     for rank in prec_ranks:
         log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank], label_counts)
 
+    logging.info("Calculating auditive similarities...")
+    aud_sims = calc_dists(aud_latents)
+
     logging.info("Calculating metrics for auditive latents...")
     aud_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision, label_counts = calc_metrics(aud_latents, dataset.labels, aud_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
+    aud_latents, aud_sims = None, None # deallocate memory
     for rank in prec_ranks:
         log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank], label_counts)

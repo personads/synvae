@@ -24,7 +24,8 @@ if __name__ == '__main__':
     arg_parser.add_argument('--beta', type=float, default=1., help='beta parameter for weighting KL-divergence (default: 1.0)')
     arg_parser.add_argument('--batch_size', type=int, default=200, help='batch size (default: 200)')
     arg_parser.add_argument('--ranks', default='1,5,10', help='precision ranks to use during evaluation (default: "1,5,10")')
-    arg_parser.add_argument('--export', action='store_true', help='export original samples and reconstructions')
+    arg_parser.add_argument('--export_data', action='store_true', help='export original samples and reconstructions')
+    arg_parser.add_argument('--export_latents', action='store_true', help='export latent vectors')
     args = arg_parser.parse_args()
 
     # check if directory already exists
@@ -48,6 +49,7 @@ if __name__ == '__main__':
         dataset = Bam(args.data_path)
         dataset.filter_labels(['emotion_gloomy', 'emotion_happy', 'emotion_peaceful', 'emotion_scary'])
         dataset.filter_uncertain()
+        dataset.make_multiclass()
     model.build()
 
     # load data
@@ -64,7 +66,7 @@ if __name__ == '__main__':
 
         # encode in batches
         
-        images, reconstructions, latents = None, None, None
+        latents = None
         # iterate over batches
         avg_loss = 0.
         avg_mse = 0.
@@ -81,31 +83,27 @@ if __name__ == '__main__':
                 avg_mse = ((avg_mse * (batch_idx - 1)) + cur_mse) / batch_idx
                 avg_kl = ((avg_kl * (batch_idx - 1)) + cur_kl) / batch_idx
                 # append to result
-                if (images is None) or (reconstructions is None) or (latents is None):
-                    images, reconstructions, latents = batch, cur_recons, cur_latents
+                if batch_idx == 1:
+                    latents = cur_latents
                 else:
-                    images = np.concatenate((images, batch), axis=0)
-                    reconstructions = np.concatenate((reconstructions, cur_recons), axis=0)
                     latents = np.concatenate((latents, cur_latents), axis=0)
+
+                if args.export_data:
+                    for idx in range(batch.shape[0]):
+                        data_idx = ((batch_idx - 1) * args.batch_size) + idx
+                        model.save_image(batch[idx].squeeze(), os.path.join(args.out_path, str(data_idx) + '_orig.png'))
+                        model.save_image(cur_recons[idx].squeeze(), os.path.join(args.out_path, str(data_idx) + '_recon.png'))
             # end of dataset
             except tf.errors.OutOfRangeError:
                 # exit batch loop and proceed to next epoch
                 break
     # truncate labels to match number of latents with potentially dropped last batch
     dataset.labels = dataset.labels[:latents.shape[0]]
-    logging.info("\rEncoded %d batches with average losses (All: %.2f | MSE: %.2f | KL: %.2f), %d reconstructions and %d latent vectors." % (batch_idx, avg_loss, avg_mse, avg_kl, reconstructions.shape[0], latents.shape[0]))
+    logging.info("\rEncoded %d batches with average losses (All: %.2f | MSE: %.2f | KL: %.2f) and %d latent vectors." % (batch_idx, avg_loss, avg_mse, avg_kl, latents.shape[0]))
 
-    if args.export:
-        logging.info("Saving outputs...")
-        for idx in range(images.shape[0]):
-            model.save_image(images[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_orig.png'))
-            model.save_image(reconstructions[idx].squeeze(), os.path.join(args.out_path, str(idx) + '_recon.png'))
-            sys.stdout.write("\rSaved %d/%d (%.2f%%)..." % (idx+1, images.shape[0], ((idx+1)*100)/images.shape[0]))
-            sys.stdout.flush()
-        logging.info("\rSaved %d images and reconstructions to '%s'." % (images.shape[0], args.out_path))
+    if args.export_latents:
         np.save(os.path.join(args.out_path, 'latents.npy'), latents)
         logging.info("Saved %d latent vectors to '%s'." % (latents.shape[0], os.path.join(args.out_path, 'latents.npy')))
-    images, reconstructions = None, None
 
     logging.info("Calculating similarities...")
     sims = calc_dists(latents)
