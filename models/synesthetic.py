@@ -126,7 +126,7 @@ class SynestheticVae(BaseModel):
         
         loss, recon_loss, latent_loss, audios, reconstructions = tf_session.run([self.loss, self.vis_model.recon_loss, self.vis_model.latent_loss, self.audios, self.reconstructions], feed_dict=feed_dict)
 
-        if hasattr(self.vis_model, 'beta_hl'): loss = recon_loss + self.beta * latent_loss
+        if hasattr(self.vis_model, 'beta_half_life'): loss = recon_loss + self.beta * latent_loss
         losses = {'All': loss, self.vis_model._recon_loss_name: recon_loss, 'KL': latent_loss}
         # save original image and reconstruction
         if (self.export_step > 0) and ((batch_idx-1) % self.export_step == 0):
