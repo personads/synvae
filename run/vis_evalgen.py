@@ -25,6 +25,13 @@ if __name__ == '__main__':
     arg_parser.add_argument('--num_tasks', default=20, help='number of tasks for evaluation (default: 20)')
     args = arg_parser.parse_args()
     
+    # check if directory already exists
+    if os.path.exists(args.out_path):
+        print("[Error] '%s' already exists." % (args.out_path,))
+        sys.exit()
+    # make necessary directories
+    os.mkdir(args.out_path)
+
     setup_logging(os.path.join(args.out_path, 'results.log'))
 
     # set up visual model
@@ -35,16 +42,17 @@ if __name__ == '__main__':
     elif args.task == 'bam':
         dataset = Bam(args.data_path)
         dataset.filter_labels(['emotion_gloomy', 'emotion_happy', 'emotion_peaceful', 'emotion_scary'])
-        dataset.filter_uncertain(round_up=False)
-    model.build()
+        dataset.filter_uncertain(round_up=True)
+        dataset.make_multiclass()
 
     # load latent vectors
     latents = np.load(args.latent_path)
+    dataset.labels = dataset.labels[:latents.shape[0]]
 
     # calculate means
     mean_latents = np.zeros([len(dataset.label_descs), latents.shape[1]])
     for c in range(len(dataset.label_descs)):
-        lbl_idcs = np.where(labels == (c * np.ones_like(dataset.labels)))
+        lbl_idcs = np.where(dataset.labels == (c * np.ones_like(dataset.labels)))
         mean_latents[c] = np.mean(latents[lbl_idcs], axis=0)
 
     # generate evaluation task
