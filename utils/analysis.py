@@ -233,44 +233,49 @@ def get_unique_samples(closest_idcs, closest_dists):
 def gen_eval_task(mean_latents, latents, labels, num_examples, num_tasks):
     # get triplet of means with largest distance between them
     trio_keys, trio_dists = get_sorted_triplets(mean_latents)
-    eval_trio, eval_trio_dist = trio_keys[0], trio_dists[0]
-    logging.info("Calculated mean triplet %s with cumulative Euclidean distance %.2f." % (str(eval_trio), eval_trio_dist))
-    # get samples which lie closest to respective means
-    closest_idcs = np.ones([3, latents.shape[0]], dtype=int) * -1
-    closest_dists = np.ones([3, latents.shape[0]]) * -1
-    for tidx in range(3):
-        # get indices of samples with same label as current mean
-        if len(labels.shape) > 1:
-            rel_idcs = np.squeeze(np.where(labels[:, eval_trio[tidx]] == 1.))
+    # iterate over triplets (in case one set has insufficient amounts of data)
+    for eval_trio, eval_trio_dist in zip(trio_keys, trio_dists):
+        logging.info("Calculated mean triplet %s with cumulative Euclidean distance %.2f." % (str(eval_trio), eval_trio_dist))
+        # get samples which lie closest to respective means
+        closest_idcs = np.ones([3, latents.shape[0]], dtype=int) * -1
+        closest_dists = np.ones([3, latents.shape[0]]) * -1
+        for tidx in range(3):
+            # get indices of samples with same label as current mean
+            if len(labels.shape) > 1:
+                rel_idcs = np.squeeze(np.where(labels[:, eval_trio[tidx]] == 1.))
+            else:
+                rel_idcs = np.squeeze(np.where(labels == (eval_trio[tidx] * np.ones_like(labels))))
+            # get closest latents of same label per mean
+            cur_closest_idcs, cur_closest_dists = get_closest(mean_latents[eval_trio[tidx]], latents, rel_idcs)
+            closest_idcs[tidx, :cur_closest_idcs.shape[0]] = cur_closest_idcs
+            closest_dists[tidx, :cur_closest_dists.shape[0]] = cur_closest_dists
+        trio_sample_idcs = get_unique_samples(closest_idcs, closest_dists)
+        # avg_dist = np.mean(closest_dists[:num_examples + num_tasks])
+        # logging.info("Calculated %d samples for mean %d with average distance %.2f." % (trio_sample_idcs[tidx].shape[0], eval_trio[tidx], avg_dist))
+        # get examples (randomly choose from available data)
+        example_idcs = sorted(np.random.choice((num_examples + num_tasks + 1), num_examples, replace=False))
+        examples = np.squeeze(trio_sample_idcs[:,example_idcs].flatten())
+        examples = examples.tolist()
+        trio_sample_idcs[:,example_idcs] = -1
+        # check whether enough data is left for generating tasks
+        if (np.logical_or.reduce(np.sum(trio_sample_idcs >= 0, axis=-1) < num_tasks)):
+            # skip to next trio
+            logging.error("[Error] Not enough data to generate %d tasks based on:\n%s" % (num_tasks, trio_sample_idcs))
+            continue
+        # exit loop if sufficient amounts are available
         else:
-            rel_idcs = np.squeeze(np.where(labels == (eval_trio[tidx] * np.ones_like(labels))))
-        # get closest latents of same label per mean
-        cur_closest_idcs, cur_closest_dists = get_closest(mean_latents[eval_trio[tidx]], latents, rel_idcs)
-        closest_idcs[tidx, :cur_closest_idcs.shape[0]] = cur_closest_idcs
-        closest_dists[tidx, :cur_closest_dists.shape[0]] = cur_closest_dists
-    trio_sample_idcs = get_unique_samples(closest_idcs, closest_dists)
-    # avg_dist = np.mean(closest_dists[:num_examples + num_tasks])
-    # logging.info("Calculated %d samples for mean %d with average distance %.2f." % (trio_sample_idcs[tidx].shape[0], eval_trio[tidx], avg_dist))
-    # get examples (randomly choose from available data)
-    example_idcs = sorted(np.random.choice((num_examples + num_tasks + 1), num_examples, replace=False))
-    examples = np.squeeze(trio_sample_idcs[:,example_idcs].flatten())
-    examples = examples.tolist()
-    trio_sample_idcs[:,example_idcs] = -1
-    # sanity check whether enough data is left for generating tasks
-    if (np.logical_or.reduce(np.sum(trio_sample_idcs >= 0, axis=-1) < num_tasks)):
-        logging.error("[Error] Not enough data to generate %d tasks based on:\n%s" % (num_tasks, trio_sample_idcs))
-        sys.exit()
-    # get tasks
-    task_idcs = np.where(trio_sample_idcs >= 0.)
-    task_trios = np.reshape(trio_sample_idcs[task_idcs], [3, -1])
-    task_trios = [task_trios[:, i].tolist() for i in range(num_tasks)]
+            break
+        # get tasks
+        task_idcs = np.where(trio_sample_idcs >= 0.)
+        task_trios = np.reshape(trio_sample_idcs[task_idcs], [3, -1])
+        task_trios = [task_trios[:, i].tolist() for i in range(num_tasks)]
 
-    # randomly select truths for tasks
-    tasks = []
-    for trio in task_trios:
-        truth_idx = random.randint(0, 2)
-        tasks.append(OrderedDict([
-            ('truth', truth_idx),
-            ('options', trio)
-        ]))
+        # randomly select truths for tasks
+        tasks = []
+        for trio in task_trios:
+            truth_idx = random.randint(0, 2)
+            tasks.append(OrderedDict([
+                ('truth', truth_idx),
+                ('options', trio)
+            ]))
     return eval_trio, examples, tasks
