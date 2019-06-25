@@ -21,8 +21,8 @@ if __name__ == '__main__':
     arg_parser.add_argument('data_split', choices=['train', 'test'], default='test', help='data split (train, test (default))')
     arg_parser.add_argument('latent_path', help='path to latent vectors')
     arg_parser.add_argument('out_path', help='path to output')
-    arg_parser.add_argument('--num_examples', default=4, help='number of examples for evaluation (default: 4)')
-    arg_parser.add_argument('--num_tasks', default=20, help='number of tasks for evaluation (default: 20)')
+    arg_parser.add_argument('--num_examples', type=int, default=4, help='number of examples for evaluation (default: 4)')
+    arg_parser.add_argument('--num_tasks', type=int, default=20, help='number of tasks for evaluation (default: 20)')
     args = arg_parser.parse_args()
     
     # check if directory already exists
@@ -42,7 +42,7 @@ if __name__ == '__main__':
     elif args.task == 'bam':
         dataset = Bam(args.data_path)
         dataset.filter_labels(['emotion_gloomy', 'emotion_happy', 'emotion_peaceful', 'emotion_scary'])
-        dataset.filter_uncertain(round_up=True)
+        dataset.filter_uncertain(round_up=False)
         dataset.make_multiclass()
 
     # load latent vectors
@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
     # generate evaluation task
     logging.info("Exporting evaluation samples...")
-    classes, examples, tasks = gen_eval_task(mean_latents, latents, dataset.labels, args.num_examples, args.num_tasks)
+    classes, examples, tasks = gen_eval_task(mean_latents, latents, dataset.labels, dataset.label_descs, args.num_examples, args.num_tasks)
     eval_config = OrderedDict([
         ('name', args.task.upper()),
         ('code', ''),
