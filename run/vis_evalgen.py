@@ -23,6 +23,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('out_path', help='path to output')
     arg_parser.add_argument('--num_examples', type=int, default=4, help='number of examples for evaluation (default: 4)')
     arg_parser.add_argument('--num_tasks', type=int, default=20, help='number of tasks for evaluation (default: 20)')
+    arg_parser.add_argument('--merge', action='store_true', help='merge classes with insufficient points into closest class')
     args = arg_parser.parse_args()
     
     # check if directory already exists
@@ -47,13 +48,29 @@ if __name__ == '__main__':
 
     # load latent vectors
     latents = np.load(args.latent_path)
-    dataset.labels = dataset.labels[:latents.shape[0]]
+    dataset.labels = dataset.labels[:latents.shape[0]] # truncate if last batch was dropped
 
     # calculate means
     mean_latents = np.zeros([len(dataset.label_descs), latents.shape[1]])
     for c in range(len(dataset.label_descs)):
         lbl_idcs = np.where(dataset.labels == (c * np.ones_like(dataset.labels)))
         mean_latents[c] = np.mean(latents[lbl_idcs], axis=0)
+
+    # reduce rare classes
+    large_labels, small_labels = [], []
+    for c in range(len(dataset.label_descs)):
+        lbl_count = np.sum(dataset.labels == c)
+        if lbl_count < (num_examples + num_tasks):
+            small_labels.append(c)
+        else:
+            large_labels.append(c)
+    logging.info("Found %d classes with insufficient datapoints." % len(small_labels))
+
+    for c in small_labels:
+        closest_labels, closest_dists = get_closest(mean_latents[c], mean_latents, [i for i in large_labels])
+        lbl_idcs = np.where(dataset.labels == (c * np.ones_like(dataset.labels)))
+        dataset.labels[lbl_idcs] = closest_labels[0]
+        logging.info("Merged '%s' into '%s' with distance %.2f." % (dataset.label_descs[c], dataset.label_descs[closest_labels[0]], closest_dists[0]))
 
     # generate evaluation task
     logging.info("Exporting evaluation samples...")
