@@ -32,7 +32,7 @@ class BaseModel:
         # set up training specific ops
         self.merge_op = tf.summary.merge_all()
         next_op = train_iter.get_next()
-        valid_next_op = valid_iter.get_next()
+        valid_next_op = valid_iter.get_next() if valid_iter else None
         # epoch training loop
         min_loss = None
         while self.epoch < max_epochs:
@@ -60,9 +60,14 @@ class BaseModel:
             if tf_writer: tf_writer.add_summary(cur_summaries, self.epoch)
             logging.info("\r[%s] Completed epoch %d/%d (%d batches). Average losses (%s).%s" % (self.__class__.__name__, self.epoch, max_epochs, batch_idx, avg_losses_str, ' '*len(cur_losses_str)))
 
-            # check performance on test split
-            valid_losses = self.test(tf_session, valid_iter, valid_next_op, out_path)
-            valid_losses_str = ' | '.join(['%s: %.2f' % (l, valid_losses[l]) for l in sorted(valid_losses)])
+            # check performance on validation split
+            if valid_iter:
+                valid_losses = self.test(tf_session, valid_iter, valid_next_op, out_path)
+                valid_losses_str = ' | '.join(['%s: %.2f' % (l, valid_losses[l]) for l in sorted(valid_losses)])
+            # if no validation split is given, use training set
+            else:
+                valid_losses = avg_losses
+                valid_losses_str = avg_losses_str
            
             # save latest model
             logging.info("Saving latest model...")

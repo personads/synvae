@@ -35,11 +35,11 @@ if __name__ == '__main__':
     model.build()
 
     # load data
-    train_iterator, valid_iterator = dataset.get_train_image_iterators(batch_size=args.batch_size)
+    iterator = dataset.get_image_iterator(batch_size=args.batch_size)
 
     epochs = args.epochs
     with tf.Session() as sess:
         # initialize variables
         sess.run(tf.global_variables_initializer())
         # training loop
-        model.train(sess, train_iterator, valid_iterator, epochs, model_path, args.out_path)
+        model.train(sess, iterator, None, epochs, model_path, args.out_path)

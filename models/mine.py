@@ -6,10 +6,9 @@ import tensorflow as tf
 from models.base import BaseModel
 
 class Mine(BaseModel):
-    def __init__(self, latent_dim, batch_size, shift=1, layer_size=128, learning_rate=1e-3):
+    def __init__(self, latent_dim, batch_size, layer_size=128, learning_rate=1e-3):
         self.latent_dim = latent_dim
         self.layer_size = layer_size
-        self.shift = shift
         self.learning_rate = learning_rate
         self.batch_size = batch_size
         self.epoch = 0
@@ -36,8 +35,11 @@ class Mine(BaseModel):
 
     def build(self):
         vis_latents, aud_latents = self.latents[:, :self.latent_dim], self.latents[:, self.latent_dim:]
-        shifted_latents = tf.concat([vis_latents, tf.concat([aud_latents[-self.shift:], aud_latents[:-self.shift]], axis=0)], axis=1)
-        inputs = tf.concat([self.latents, shifted_latents], axis=0)
+        inputs = tf.concat([vis_latents, aud_latents], axis=1)
+        for shift in range(1, self.latents.shape[0]):
+            shifted_inputs = tf.concat([vis_latents, tf.concat([aud_latents[-shift:], aud_latents[:-shift]], axis=0)], axis=1)
+            inputs = tf.concat([inputs, shifted_inputs], axis=0)
+        print("inputs:", inputs)
 
         self.predictions = self.build_mlp(inputs)
         # set up loss
@@ -56,7 +58,8 @@ class Mine(BaseModel):
         shifted_predictions = predictions[self.latents.shape[0]:]
         self.mi_true = true_predictions
         self.mi_shift = shifted_predictions
-        loss = tf.reduce_mean(true_predictions) - tf.log(tf.reduce_mean(tf.exp(shifted_predictions)))
+        # loss = tf.reduce_mean(true_predictions) - tf.log(tf.reduce_mean(tf.exp(shifted_predictions)))
+        loss = tf.reduce_mean(true_predictions) - tf.reduce_mean(tf.exp(shifted_predictions)) + 1
         loss = -loss
         return loss
 
