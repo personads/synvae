@@ -57,20 +57,28 @@ if __name__ == '__main__':
         mean_latents[c] = np.mean(latents[lbl_idcs], axis=0)
 
     # reduce rare classes
-    large_labels, small_labels = [], []
-    for c in range(len(dataset.label_descs)):
-        lbl_count = np.sum(dataset.labels == c)
-        if lbl_count < (num_examples + num_tasks):
-            small_labels.append(c)
-        else:
-            large_labels.append(c)
-    logging.info("Found %d classes with insufficient datapoints." % len(small_labels))
+    if args.merge:
+        large_labels, small_labels = [], []
+        for c in range(len(dataset.label_descs)):
+            lbl_count = np.sum(dataset.labels == c)
+            if lbl_count < (args.num_examples + args.num_tasks):
+                small_labels.append(c)
+            else:
+                large_labels.append(c)
+        logging.info("Found %d classes with insufficient datapoints." % len(small_labels))
 
-    for c in small_labels:
-        closest_labels, closest_dists = get_closest(mean_latents[c], mean_latents, [i for i in large_labels])
-        lbl_idcs = np.where(dataset.labels == (c * np.ones_like(dataset.labels)))
-        dataset.labels[lbl_idcs] = closest_labels[0]
-        logging.info("Merged '%s' into '%s' with distance %.2f." % (dataset.label_descs[c], dataset.label_descs[closest_labels[0]], closest_dists[0]))
+        # reassign small labels to larger ones
+        for c in small_labels:
+            closest_labels, closest_dists = get_closest(mean_latents[c], mean_latents, [i for i in large_labels])
+            lbl_idcs = np.where(dataset.labels == (c * np.ones_like(dataset.labels)))
+            dataset.labels[lbl_idcs] = closest_labels[0]
+            logging.info("Merged '%s' into '%s' with distance %.2f." % (dataset.label_descs[c], dataset.label_descs[closest_labels[0]], closest_dists[0]))
+    
+        for c in large_labels:
+            lbl_idcs = np.where(dataset.labels == (c * np.ones_like(dataset.labels)))
+            mean_latents[c] = np.mean(latents[lbl_idcs], axis=0)
+    
+        mean_latents = mean_latents[large_labels]
 
     # generate evaluation task
     logging.info("Exporting evaluation samples...")
