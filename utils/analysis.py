@@ -233,8 +233,6 @@ def get_unique_samples(closest_idcs, closest_dists):
 def gen_eval_task(mean_latents, latents, labels, label_descs, num_examples, num_tasks):
     # get triplet of means with largest distance between them
     trio_keys, trio_dists = get_sorted_triplets(mean_latents)
-    for t, d in zip(trio_keys, trio_dists):
-        logging.info("Calculated mean triplet (%s) with cumulative Euclidean distance %.2f." % (', '.join([label_descs[l] for l in t]), d))
     # iterate over triplets (in case one set has insufficient amounts of data)
     for eval_trio, eval_trio_dist in zip(trio_keys, trio_dists):
         logging.info("Calculated mean triplet (%s) with cumulative Euclidean distance %.2f." % (', '.join([label_descs[l] for l in eval_trio]), eval_trio_dist))

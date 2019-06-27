@@ -8,6 +8,8 @@ import tensorflow as tf
 
 from collections import defaultdict, OrderedDict
 
+from sklearn.cluster import KMeans
+
 from data import *
 from utils.analysis import *
 from utils.experiments import *
@@ -23,6 +25,7 @@ if __name__ == '__main__':
     arg_parser.add_argument('out_path', help='path to output')
     arg_parser.add_argument('--num_examples', type=int, default=4, help='number of examples for evaluation (default: 4)')
     arg_parser.add_argument('--num_tasks', type=int, default=20, help='number of tasks for evaluation (default: 20)')
+    arg_parser.add_argument('--kmeans', action='store_true', help='use k-means clustering instead of class means')
     arg_parser.add_argument('--merge', action='store_true', help='merge classes with insufficient points into closest class')
     args = arg_parser.parse_args()
     
@@ -50,11 +53,18 @@ if __name__ == '__main__':
     latents = np.load(args.latent_path)
     dataset.labels = dataset.labels[:latents.shape[0]] # truncate if last batch was dropped
 
+    if args.kmeans:
+        kmeans = KMeans(n_clusters=3).fit(latents)
+        mean_latents = kmeans.cluster_centers_
+        dataset.labels = kmeans.labels_
+        dataset.label_descs = ['cluster-%d' % i for i in range(mean_latents.shape[0])]
+        logging.info("Computed %d clusters using k-means." % mean_latents.shape[0])
     # calculate means
-    mean_latents = np.zeros([len(dataset.label_descs), latents.shape[1]])
-    for c in range(len(dataset.label_descs)):
-        lbl_idcs = np.where(dataset.labels == (c * np.ones_like(dataset.labels)))
-        mean_latents[c] = np.mean(latents[lbl_idcs], axis=0)
+    else:
+        mean_latents = np.zeros([len(dataset.label_descs), latents.shape[1]])
+        for c in range(len(dataset.label_descs)):
+            lbl_idcs = np.where(dataset.labels == (c * np.ones_like(dataset.labels)))
+            mean_latents[c] = np.mean(latents[lbl_idcs], axis=0)
 
     # reduce rare classes
     if args.merge:
