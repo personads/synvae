@@ -20,7 +20,7 @@ class Mine(BaseModel):
         res  = '<%s: ' % self.__class__.__name__
         res += '[%d, %d] -> ' % (self.latent_dim, self.latent_dim)
         res += '%d units -> ' % self.layer_size
-        res += 'I(i;a)'
+        res += '-I(v;a)'
         res += '>'
         return res
 
@@ -36,10 +36,10 @@ class Mine(BaseModel):
     def build(self):
         vis_latents, aud_latents = self.latents[:, :self.latent_dim], self.latents[:, self.latent_dim:]
         inputs = tf.concat([vis_latents, aud_latents], axis=1)
-        for shift in range(1, self.latents.shape[0]):
+        # for shift in range(1, self.latents.shape[0]):
+        for shift in range(self.latents.shape[0]):
             shifted_inputs = tf.concat([vis_latents, tf.concat([aud_latents[-shift:], aud_latents[:-shift]], axis=0)], axis=1)
             inputs = tf.concat([inputs, shifted_inputs], axis=0)
-        print("inputs:", inputs)
 
         self.predictions = self.build_mlp(inputs)
         # set up loss
