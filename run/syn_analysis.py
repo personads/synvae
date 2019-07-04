@@ -109,7 +109,7 @@ if __name__ == '__main__':
                 if args.export_data:
                     for idx in range(batch.shape[0]):
                         data_idx = ((batch_idx - 1) * args.batch_size) + idx
-                        # model.vis_model.save_image(batch[idx].squeeze(), os.path.join(args.out_path, str(data_idx) + '_orig.png'))
+                        model.vis_model.save_image(batch[idx].squeeze(), os.path.join(args.out_path, str(data_idx) + '_orig.png'))
                         model.vis_model.save_image(cur_recons[idx].squeeze(), os.path.join(args.out_path, str(data_idx) + '_recon.png'))
                         model.aud_model.save_midi(cur_audios[idx], os.path.join(args.out_path, str(data_idx) + '_audio.mid'))
             # end of dataset
@@ -132,20 +132,26 @@ if __name__ == '__main__':
     # parse precision ranks
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
-    logging.info("Calculating visual similarities...")
-    vis_sims = calc_dists(vis_latents)
+    if vis_latents.shape[0] <= 20000:
+        logging.info("Calculating visual similarities...")
+        vis_sims = calc_dists(vis_latents)
+    else:
+        vis_sims = None
 
     logging.info("Calculating metrics for visual latents...")
-    vis_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision, label_counts = calc_metrics(vis_latents, dataset.labels, vis_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
+    vis_mean_latents, label_precision, label_counts = calc_metrics(vis_latents, dataset.labels, vis_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     vis_latents, vis_sims = None, None # deallocate memory
     for rank in prec_ranks:
-        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank], label_counts)
+        log_metrics(dataset.label_descs, rank, label_precision[rank], label_counts)
 
-    logging.info("Calculating auditive similarities...")
-    aud_sims = calc_dists(aud_latents)
+    if aud_latents.shape[0] <= 20000:
+        logging.info("Calculating auditive similarities...")
+        aud_sims = calc_dists(aud_latents)
+    else:
+        aud_sims = None
 
     logging.info("Calculating metrics for auditive latents...")
-    aud_mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision, label_counts = calc_metrics(aud_latents, dataset.labels, aud_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
+    aud_mean_latents, label_precision, label_counts = calc_metrics(aud_latents, dataset.labels, aud_sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     aud_latents, aud_sims = None, None # deallocate memory
     for rank in prec_ranks:
-        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank], label_counts)
+        log_metrics(dataset.label_descs, rank, label_precision[rank], label_counts)

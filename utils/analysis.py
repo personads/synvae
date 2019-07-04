@@ -73,19 +73,16 @@ def calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='eucl
             cur_labels = labels if len(labels.shape) < 2 else multi_labels[lbl] # set up labels for binary and multi-class
 
             # sort neighbours by similarity (without self)
-            cur_sims = [(i, s) for i, s in enumerate(sims[idx]) if i != idx]
-            cur_sims = sorted(cur_sims, key=lambda el: el[1], reverse=(sim_metric == 'cosine'))
-            # get sorted neighbours and similarities
-            sim_idcs, sim_vals = zip(*cur_sims)
-            sim_idcs, sim_vals = np.array(sim_idcs), np.array(sim_vals)
+            if sims is not None:
+                cur_sims = [(i, s) for i, s in enumerate(sims[idx]) if i != idx]
+                cur_sims = sorted(cur_sims, key=lambda el: el[1], reverse=(sim_metric == 'cosine'))
+                # get sorted neighbours and similarities
+                sim_idcs, sim_vals = zip(*cur_sims)
+                sim_idcs, sim_vals = np.array(sim_idcs), np.array(sim_vals)
+            # if not precomputed, calculate current similarities (more memory efficient)
+            else:
+                sim_idcs, sim_vals = get_closest(latents[idx], latents, [i for i in range(latents.shape[0]) if i != idx])
 
-            # calculate average distances
-            rel_idcs = np.where(cur_labels == (lbl * np.ones_like(cur_labels)))
-            oth_idcs = np.where(cur_labels != (lbl * np.ones_like(cur_labels)))
-            rel_avg_sim = np.mean(sims[idx][rel_idcs])
-            oth_avg_sim = np.mean(sims[idx][oth_idcs])
-            rel_sim_by_label[lbl] += rel_avg_sim
-            oth_sim_by_label[lbl] += oth_avg_sim
             label_idcs[lbl].append(idx)
 
             # calculate precision/recall at top n
@@ -105,14 +102,12 @@ def calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='eucl
 
     # average out metrics
     label_counts = np.array([len(lbl_idcs) for lbl_idcs in label_idcs])
-    rel_sim_by_label /= label_counts
-    oth_sim_by_label /= label_counts
     for rank in prec_ranks:
         label_precision[rank] /= label_counts
 
     logging.info("\rCalculated metrics for %d latents.%s" % (latents.shape[0], ' '*16))
 
-    return mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision, label_counts
+    return mean_latents, label_precision, label_counts
 
 
 def calc_latent_kl(vis_latents, aud_latents, perplexity):
@@ -165,6 +160,7 @@ def calc_mltcls_metrics(labels, predictions):
         fp = np.sum(predictions[oth_idcs, lbl] == 1.)
         tn = np.sum(predictions[oth_idcs, lbl] == 0.)
         fn = np.sum(predictions[lbl_idcs, lbl] == 0.)
+        print("Label %d: %d TP, %d FP, %d TN, %d FN" % (lbl, tp, fp, tn, fn))
         label_precision[lbl] = tp / (tp + fp)
         label_recall[lbl] = tp / (tp + fn)
         label_accuracy[lbl] = (tp + tn) / (tp + fp + tn + fn)
@@ -172,19 +168,13 @@ def calc_mltcls_metrics(labels, predictions):
     return np.mean(label_accuracy), label_precision, label_recall, label_accuracy
 
 
-def log_metrics(label_descs, top_n, rel_sim_by_label, oth_sim_by_label, precision_by_label, label_counts):
+def log_metrics(label_descs, top_n, precision_by_label, label_counts):
     logging.info("Overall metrics:")
     for label_idx, label in enumerate(label_descs):
-        logging.info("  %s: %.2f P@%d, %.2f rel sim, %.2f oth sim" % (
-            label, precision_by_label[label_idx], top_n,
-            rel_sim_by_label[label_idx],
-            oth_sim_by_label[label_idx]
-            ))
-    logging.info("Total (avg): %.2f P@%d, %.2f rel sim, %.2f oth sim" % (
-            np.sum(precision_by_label * (label_counts/np.sum(label_counts))), top_n,
-            np.mean(rel_sim_by_label),
-            np.mean(oth_sim_by_label)
-        ))
+        logging.info("  %s: %.2f P@%d" % (
+            label, precision_by_label[label_idx], top_n))
+    logging.info("Total (avg): %.2f P@%d" % (
+            np.sum(precision_by_label * (label_counts/np.sum(label_counts))), top_n))
 
 
 def get_sorted_triplets(latents):

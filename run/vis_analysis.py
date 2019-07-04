@@ -105,13 +105,16 @@ if __name__ == '__main__':
         np.save(os.path.join(args.out_path, 'latents.npy'), latents)
         logging.info("Saved %d latent vectors to '%s'." % (latents.shape[0], os.path.join(args.out_path, 'latents.npy')))
 
-    logging.info("Calculating similarities...")
-    sims = calc_dists(latents)
+    if latents.shape[0] <= 20000:
+        logging.info("Calculating similarities...")
+        sims = calc_dists(latents)
+    else:
+        sims = None
 
     # parse precision ranks
     prec_ranks = [int(r) for r in args.ranks.split(',')]
 
     logging.info("Calculating metrics...")
-    mean_latents, rel_sim_by_label, oth_sim_by_label, label_precision, label_counts = calc_metrics(latents, dataset.labels, sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
+    mean_latents, label_precision, label_counts = calc_metrics(latents, dataset.labels, sims, len(dataset.label_descs), prec_ranks, sim_metric='euclidean')
     for rank in prec_ranks:
-        log_metrics(dataset.label_descs, rank, rel_sim_by_label, oth_sim_by_label, label_precision[rank], label_counts)
+        log_metrics(dataset.label_descs, rank, label_precision[rank], label_counts)
