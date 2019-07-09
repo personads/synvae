@@ -10,13 +10,15 @@ class Bam(Dataset):
     def __init__(self, data_path):
         # init internal variables
         self.data = [os.path.join(data_path, 'img/', cur_path) for cur_path in os.listdir(os.path.join(data_path, 'img/'))]
-        self.data.sort(key=lambda el: int(os.path.splitext(os.path.basename(el))[0])) #sort by MID
+        self.data.sort(key=lambda el: int(os.path.splitext(os.path.basename(el))[0])) # sort by MID
+        # self.data.sort(key=lambda el: int(os.path.basename(el).split('_')[0])) # load reconstructions
         self.labels = np.load(os.path.join(data_path, 'labels.npy'))
         self.label_descs = [
             'content_bicycle', 'content_bird', 'content_building', 'content_cars', 'content_cat', 'content_dog', 'content_flower', 'content_people', 'content_tree',
             'emotion_gloomy', 'emotion_happy', 'emotion_peaceful', 'emotion_scary',
             'media_oilpaint', 'media_watercolor']
         self.image_dims = [64, 64, 3]
+        self.labels = self.labels[:len(self.data)] # truncate labels if loading reconstructions
         logging.info("[BAM] Found %d images in '%s'." % (len(self.data), data_path))
 
 
@@ -93,6 +95,7 @@ class Bam(Dataset):
         logging.info("[BAM] Converted labels to %d distinct classes:" % (len(self.label_descs),))
         for li, desc in enumerate(self.label_descs):
             logging.info("  '%s': %d (%.2f%%)" % (desc, mltcls_counter[li], (mltcls_counter[li] * 100)/self.labels.shape[0]))
+
 
     def get_iterator(self, batch_size):
         paths = tf.data.Dataset.from_tensor_slices({'images': self.data, 'labels': self.labels})

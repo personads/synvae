@@ -24,10 +24,10 @@ if __name__ == '__main__':
         model = CifarCnn(batch_size=args.batch_size)
         dataset = Cifar(args.data_path)
     elif args.task == 'bam':
-        model = BamCnn(batch_size=args.batch_size)
         dataset = Bam(args.data_path)
         dataset.filter_labels(['emotion_gloomy', 'emotion_happy', 'emotion_peaceful', 'emotion_scary'])
-        dataset.filter_uncertain()
+        dataset.filter_uncertain(round_up=True)
+        model = BamCnn(num_labels=len(dataset.label_descs), batch_size=args.batch_size)
     model.build()
 
     # load data

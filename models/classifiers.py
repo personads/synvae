@@ -52,23 +52,19 @@ class VisualCnn(BaseModel):
 
 
     def run_train_step(self, tf_session, batch):
-        _, cur_loss, summaries, pred = tf_session.run([self.train_op, self.loss, self.merge_op, self.predictions], feed_dict={self.images: batch['images'], self.labels: batch['labels']})
-        '''print("PRED:")
-        print(pred[:10,:])
-        print("TRUTH:")
-        print(batch['labels'][:10,:])'''
+        _, cur_loss, summaries = tf_session.run([self.train_op, self.loss, self.merge_op], feed_dict={self.images: batch['images'], self.labels: batch['labels']})
         return {'All': cur_loss}, summaries
 
 
     def run_test_step(self, tf_session, batch, batch_idx, out_path):
-        cur_loss = tf_session.run(self.loss, feed_dict={self.images: batch['images'], self.labels: batch['labels']})
+        cur_loss, preds = tf_session.run([self.loss, self.predictions], feed_dict={self.images: batch['images'], self.labels: batch['labels']})
         return {'All': cur_loss}
 
 
 class BamCnn(VisualCnn):
-    def __init__(self, batch_size):
-        super().__init__(img_height=64, img_width=64, img_depth=3, num_labels=15, batch_size=batch_size, learning_rate=1e-4)
-        self.labels = tf.placeholder(tf.float32, [self.batch_size, self.num_labels], name='labels') # multi-class
+    def __init__(self, num_labels, batch_size):
+        super().__init__(img_height=64, img_width=64, img_depth=3, num_labels=num_labels, batch_size=batch_size, learning_rate=1e-4)
+        self.labels = tf.placeholder(tf.float32, [self.batch_size, self.num_labels], name='labels') # multi-labels
 
 
     def build_cnn(self, images):
@@ -84,8 +80,8 @@ class BamCnn(VisualCnn):
 
 
     def calc_loss(self, predictions, truths):
-        return -tf.reduce_sum((truths * tf.log(predictions + 1e-9)) + ((1 - truths) * tf.log(1 - predictions + 1e-9)))
-        # return tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(logits=predictions, labels=truths)) # multi-class
+        loss =  -tf.reduce_mean(tf.reduce_sum((truths * tf.log(predictions + 1e-9)) + ((1 - truths) * tf.log(1 - predictions + 1e-9)), axis=-1))
+        return loss
 
 
 class CifarCnn(VisualCnn):
