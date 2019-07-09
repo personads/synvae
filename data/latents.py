@@ -17,4 +17,6 @@ class Latents(Dataset):
     def _load_latents(self, vis_path, aud_path):
         vis_latents = np.load(vis_path)
         aud_latents = np.load(aud_path)
-        return np.concatenate((vis_latents, aud_latents), axis=1)
+        # truncate to common size
+        min_size = min(vis_latents.shape[0], aud_latents.shape[0])
+        return np.concatenate((vis_latents[:min_size], aud_latents[:min_size]), axis=1)
