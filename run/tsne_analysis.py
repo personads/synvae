@@ -8,12 +8,17 @@ import numpy as np
 
 from sklearn.manifold import TSNE
 from matplotlib.offsetbox import *
+from PIL import Image
 
 from utils.experiments import load_data
 
+def load_image(path):
+    img = Image.open(path)
+    return np.array(img).squeeze()
+
 if __name__ == '__main__':
     arg_parser = argparse.ArgumentParser(description='tSNE Plot')
-    arg_parser.add_argument('task', choices=['mnist', 'cifar'], help='name of the task (mnist, cifar)')
+    arg_parser.add_argument('task', choices=['mnist', 'cifar', 'bam'], help='name of the task (mnist, cifar)')
     arg_parser.add_argument('data_path', help='path to data (not required for original MNIST)')
     arg_parser.add_argument('data_split', choices=['train', 'test'], default='test', help='data split (train, test (default))')
     arg_parser.add_argument('latent_path', help='path to numpy latent vectors')
@@ -78,7 +83,10 @@ if __name__ == '__main__':
 
     # plot data points
     for i in range(tsne_latents.shape[0]):
-        img = images[subset_idcs[i]].squeeze()
+        if type(image) is str:
+            img = load_image(images[subset_idcs[i]])
+        else:
+            img = images[subset_idcs[i]].squeeze()
         if (len(args.eval_task) > 0) and (subset_idcs[i] in eval_idcs):
             bboxprops = dict(lw=2., ec='coral', alpha=.7)
             ab = AnnotationBbox(OffsetImage(img, zoom=.5, cmap='gray', alpha=.8), (tsne_latents[i][0], tsne_latents[i][1]), pad=0., bboxprops=bboxprops)

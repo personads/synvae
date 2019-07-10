@@ -51,11 +51,13 @@ def load_data(data_name, split, data_path=None):
         dataset = Mnist(split, data_path)
     elif data_name == 'cifar':
         dataset = Cifar(data_path)
+    elif data_name == 'bam':
+        dataset = Bam(data_path)
     images = dataset.data
     labels = dataset.labels
     label_descs = dataset.label_descs
     num_labels = len(label_descs)
 
-    logging.info("Loaded %d %s images from %s." % (images.shape[0], split, data_name.upper()))
+    logging.info("Loaded %d %s images from %s." % (len(images), split, data_name.upper()))
 
     return images, labels, label_descs, num_labels
