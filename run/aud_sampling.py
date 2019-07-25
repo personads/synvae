@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
             for i, audio_tensor in enumerate(results):
                 if args.export:
-                    latent_idx = np.floor(i / args.num_samples)
+                    latent_idx = np.floor(i / args.num_samples) if len(magnitudes) > 0 else i
                     midi_path = '%s_%s-%03d.mid' % (args.config_name, str_datetime, latent_idx)
                     if len(magnitudes) > 0:
                         midi_path = '%s_%s-%03d-mag%.2f.mid' % (args.config_name, str_datetime, latent_idx, magnitudes[(i % len(magnitudes))])
