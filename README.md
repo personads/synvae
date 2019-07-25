@@ -2,7 +2,6 @@
 
 Translating Visual Works of Art into Music
 
-[TOC]
 
 The Synesthetic Variational Autoencoder (SynVAE) attempts to translate images into the music domain in an unsupervised manner. This repository contains the code used in the associated experiments. For more details, please visit the project's website at [https://personads.me/x/synvae](https://personads.me/x/synvae).
 
