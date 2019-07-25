@@ -53,6 +53,9 @@ def load_data(data_name, split, data_path=None):
         dataset = Cifar(data_path)
     elif data_name == 'bam':
         dataset = Bam(data_path)
+        dataset.filter_labels(['emotion_gloomy', 'emotion_happy', 'emotion_peaceful', 'emotion_scary'])
+        dataset.filter_uncertain(round_up=False)
+        dataset.make_multiclass()
     images = dataset.data
     labels = dataset.labels
     label_descs = dataset.label_descs
