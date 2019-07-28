@@ -46,6 +46,26 @@ def get_closest(centroid, latents, rel_idcs):
     return np.array(latent_idcs, dtype=int), np.array(dists)
 
 
+def get_minmax(centroids, eval_trio, true_idx, latents, rel_idcs):
+    rel_latents = latents[rel_idcs]
+    dists = np.zeros(rel_idcs.shape[0])
+    for c in range(centroids.shape[0]):
+        if c not in eval_trio:
+            continue
+        cur_dists = (rel_latents - centroids[c])**2
+        cur_dists = np.sum(cur_dists, axis=1)
+        cur_dists = np.sqrt(cur_dists)
+        if c == true_idx:
+            dists += cur_dists
+        else:
+            dists -= cur_dists/2
+
+    dists = [(rel_idcs[i], d) for i, d in enumerate(dists)] # re-map to global latent indices
+    dists = sorted(dists, key=lambda el: el[1])
+    latent_idcs, dists = zip(*dists)
+    return np.array(latent_idcs, dtype=int), np.array(dists)
+
+
 def calc_metrics(latents, labels, sims, num_labels, prec_ranks, sim_metric='euclidean'):
     # set up result arrays
     mean_latents = np.zeros([num_labels, latents.shape[1]])
@@ -204,7 +224,8 @@ def get_unique_samples(closest_idcs, closest_dists):
         ([row, col], closest_dists[row, col])
         for row in range(closest_dists.shape[0])
         for col in range(closest_dists.shape[1])
-        if closest_dists[row, col] >= 0]
+        if closest_dists[row, col] > -100]
+        # if closest_dists[row, col] >= 0]
     idx_dist_map = sorted(idx_dist_map, key=lambda el: el[1])
 
     # go through samples in globally sorted order
@@ -220,15 +241,15 @@ def get_unique_samples(closest_idcs, closest_dists):
     return sample_idcs
 
 
-def gen_eval_task(mean_latents, latents, labels, label_descs, num_examples, num_tasks):
+def gen_eval_task(mean_latents, latents, labels, label_descs, num_examples, num_tasks, sel_mode='closest'):
     # get triplet of means with largest distance between them
     trio_keys, trio_dists = get_sorted_triplets(mean_latents)
     # iterate over triplets (in case one set has insufficient amounts of data)
     for eval_trio, eval_trio_dist in zip(trio_keys, trio_dists):
         logging.info("Calculated mean triplet (%s) with cumulative Euclidean distance %.2f." % (', '.join([label_descs[l] for l in eval_trio]), eval_trio_dist))
         # get samples which lie closest to respective means
-        closest_idcs = np.ones([3, latents.shape[0]], dtype=int) * -1
-        closest_dists = np.ones([3, latents.shape[0]]) * -1
+        closest_idcs = np.ones([3, latents.shape[0]], dtype=int) * -100
+        closest_dists = np.ones([3, latents.shape[0]]) * -100
         is_valid_trio = True
         for tidx in range(3):
             # get indices of samples with same label as current mean
@@ -241,7 +262,12 @@ def gen_eval_task(mean_latents, latents, labels, label_descs, num_examples, num_
                 is_valid_trio = False
                 break
             # get closest latents of same label per mean
-            cur_closest_idcs, cur_closest_dists = get_closest(mean_latents[eval_trio[tidx]], latents, rel_idcs)
+            if sel_mode == 'closest':
+                cur_closest_idcs, cur_closest_dists = get_closest(mean_latents[eval_trio[tidx]], latents, rel_idcs)
+            elif sel_mode == 'minmax':
+                cur_closest_idcs, cur_closest_dists = get_minmax(mean_latents, eval_trio, eval_trio[tidx], latents, rel_idcs)
+            else:
+                assert (sel_mode in ['closest', 'minmax']), "[Error] Unknown sample selection mode '%s'." % sel_mode
             closest_idcs[tidx, :cur_closest_idcs.shape[0]] = cur_closest_idcs
             closest_dists[tidx, :cur_closest_dists.shape[0]] = cur_closest_dists
         # exit loop if sufficient amounts are available
@@ -265,6 +291,7 @@ def gen_eval_task(mean_latents, latents, labels, label_descs, num_examples, num_
     # get tasks
     task_idcs = np.where(trio_sample_idcs >= 0.)
     task_trios = np.reshape(trio_sample_idcs[task_idcs], [3, -1])
+    # convert indices per task into lists
     task_trios = [task_trios[:, i].tolist() for i in range(num_tasks)]
 
     # randomly select truths for tasks
